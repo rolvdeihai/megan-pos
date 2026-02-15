@@ -190,7 +190,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white p-8 rounded-lg">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Memuat invoice...</p>
         </div>
       </div>
@@ -213,7 +213,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
           <div className="flex items-center space-x-3">
             <button
               onClick={handlePrint}
-              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
             >
               <PrinterIcon className="w-5 h-5 mr-2" />
               Cetak
@@ -263,11 +263,10 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
                   )}
                   <p>
                     <span className="text-gray-600">Status:</span>{' '}
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      orderDetails.status === 'completed'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
+                    <span className={`px-2 py-1 text-xs rounded-full ${orderDetails.status === 'completed'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                      }`}>
                       {orderDetails.status}
                     </span>
                   </p>
@@ -383,11 +382,10 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
                         key={method}
                         type="button"
                         onClick={() => setPaymentMethod(method)}
-                        className={`py-3 px-4 rounded-lg border-2 flex flex-col items-center justify-center ${
-                          paymentMethod === method
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
+                        className={`py-3 px-4 rounded-lg border-2 flex flex-col items-center justify-center ${paymentMethod === method
+                          ? 'border-primary bg-primary/10'
+                          : 'border-gray-200 hover:border-gray-300'
+                          }`}
                       >
                         <span className="text-2xl mb-2">
                           {method === 'cash' && '💵'}
@@ -414,7 +412,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
                         type="number"
                         value={cashReceived || ''}
                         onChange={(e) => calculateChange(parseFloat(e.target.value) || 0)}
-                        className="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                         placeholder="Masukkan jumlah uang"
                       />
                     </div>
@@ -441,7 +439,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
                 <button
                   onClick={handlePayment}
                   disabled={!paymentMethod || (paymentMethod === 'cash' && cashReceived < orderDetails.total_amount)}
-                  className="w-full py-4 bg-green-600 text-white rounded-lg font-bold text-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  className="w-full py-4 bg-primary text-white rounded-lg font-bold text-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
                   <CheckCircleIcon className="w-6 h-6 mr-2" />
                   Konfirmasi Pembayaran

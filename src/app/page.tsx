@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { 
-  ArrowRightIcon, 
-  CheckCircleIcon, 
-  CurrencyDollarIcon, 
-  UserGroupIcon, 
-  ChartBarIcon, 
+import { useAuth } from '@/components/auth/AuthProvider';
+import {
+  ArrowRightIcon,
+  CheckCircleIcon,
+  CurrencyDollarIcon,
+  UserGroupIcon,
+  ChartBarIcon,
   DevicePhoneMobileIcon,
   ShoppingBagIcon,
   BuildingStorefrontIcon,
@@ -19,13 +20,20 @@ import {
 
 export default function HomePage() {
   const [email, setEmail] = useState('');
+  const { user } = useAuth();
+  const isThemed = Boolean(user);
+  const primaryButtonClass = isThemed
+    ? 'bg-primary hover:bg-primary/90'
+    : 'bg-blue-600 hover:bg-blue-600/90';
+  const primaryTextClass = isThemed ? 'text-primary' : 'text-blue-600';
+  const primaryHoverTextClass = isThemed ? 'hover:text-primary' : 'hover:text-blue-600';
 
   const features = [
     {
       icon: <ShoppingBagIcon className="w-8 h-8" />,
       title: 'Manajemen Order Lengkap',
       description: 'Kelola order dine-in, takeaway, dan delivery dalam satu sistem terintegrasi',
-      color: 'text-blue-600 bg-blue-100'
+      color: 'text-blue-600 bg-blue-600/10'
     },
     {
       icon: <BuildingStorefrontIcon className="w-8 h-8" />,
@@ -156,13 +164,13 @@ export default function HomePage() {
             <div className="flex items-center space-x-4">
               <Link
                 href="/login"
-                className="text-blue-600 hover:text-blue-700 font-medium"
+                className={`${primaryTextClass} ${primaryHoverTextClass} font-medium`}
               >
                 Masuk
               </Link>
               <Link
                 href="/register"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
+                className={`${primaryButtonClass} text-white px-4 py-2 rounded-lg font-medium`}
               >
                 Daftar Gratis
               </Link>
@@ -186,7 +194,7 @@ export default function HomePage() {
               <div className="mt-8 flex flex-col sm:flex-row gap-4">
                 <Link
                   href="/register"
-                  className="inline-flex items-center justify-center px-8 py-3 text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700"
+                  className={`inline-flex items-center justify-center px-8 py-3 text-base font-medium rounded-lg text-white ${primaryButtonClass}`}
                 >
                   Mulai Gratis 14 Hari
                   <ArrowRightIcon className="ml-2 w-5 h-5" />
@@ -353,12 +361,12 @@ export default function HomePage() {
               >
                 {plan.recommended && (
                   <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                    <span className="bg-blue-600 text-white px-4 py-1 rounded-full text-sm font-medium">
+                    <span className={`${primaryButtonClass} text-white px-4 py-1 rounded-full text-sm font-medium`}>
                       POPULER
                     </span>
                   </div>
                 )}
-                
+
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">
                   {plan.name}
                 </h3>
@@ -380,11 +388,10 @@ export default function HomePage() {
 
                 <Link
                   href="/register"
-                  className={`block text-center py-3 rounded-lg font-medium ${
-                    plan.recommended
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  className={`block text-center py-3 rounded-lg font-medium ${plan.recommended
+                      ? `${primaryButtonClass} text-white`
                       : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   {plan.recommended ? 'Mulai Sekarang' : 'Pilih Paket'}
                 </Link>
@@ -416,7 +423,7 @@ export default function HomePage() {
             {testimonials.map((testimonial, idx) => (
               <div key={idx} className="bg-white rounded-2xl shadow-lg p-8">
                 <div className="flex items-center mb-6">
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                  <div className="w-12 h-12 bg-blue-600/10 rounded-full flex items-center justify-center">
                     <span className="font-bold text-blue-600">
                       {testimonial.avatar}
                     </span>
@@ -473,7 +480,7 @@ export default function HomePage() {
               />
               <button
                 type="submit"
-                className="bg-white text-blue-600 px-8 py-3 rounded-lg font-medium hover:bg-blue-50 transition-colors"
+                className={`bg-white ${primaryTextClass} px-8 py-3 rounded-lg font-medium ${isThemed ? 'hover:bg-primary/10' : 'hover:bg-blue-600/10'} transition-colors`}
               >
                 Coba Gratis
               </button>

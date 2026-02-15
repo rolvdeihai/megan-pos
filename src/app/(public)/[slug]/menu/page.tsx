@@ -87,7 +87,7 @@ export default async function PublicMenuPage({ params }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <RestaurantHeader restaurant={restaurant} settings={settings} />
+      <RestaurantHeader restaurant={restaurant} settings={finalSettings} />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Order Type Selection */}
@@ -96,7 +96,7 @@ export default async function PublicMenuPage({ params }: Props) {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Pilih Tipe Order</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {settings?.enable_table_selection && (
-                <button className="p-4 border-2 border-blue-500 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors">
+                <button className="p-4 border-2 border-primary rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors">
                   <div className="text-2xl mb-2">🍽️</div>
                   <h3 className="font-semibold text-gray-900">Dine In</h3>
                   <p className="text-sm text-gray-600 mt-1">Makan di tempat</p>
@@ -173,7 +173,7 @@ export default async function PublicMenuPage({ params }: Props) {
                 <div className="font-semibold text-gray-900">Keranjang (3 items)</div>
                 <div className="text-sm text-gray-600">Rp 150,000</div>
               </div>
-              <button className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">
+              <button className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium">
                 Lanjut ke Pembayaran
               </button>
             </div>

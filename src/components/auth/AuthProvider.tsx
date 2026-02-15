@@ -9,6 +9,13 @@ interface User {
   full_name: string;
   restaurant_name: string;
   restaurant_slug?: string;
+  role?: string | null;
+  role_id?: string | null;
+  role_name?: string | null;
+  is_staff?: boolean;
+  user_type?: 'owner' | 'staff';
+  permissions?: string[];
+  user_id?: string;
 }
 
 interface AuthContextType {

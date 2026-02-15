@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import OrderModal from '@/components/orders/OrderModal';
 import InvoiceModal from '@/components/orders/InvoiceModal';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { getOwnerId } from '@/lib/user-scope';
 
 type Order = {
   id: string;
@@ -32,6 +33,7 @@ export default function OrdersPage() {
 
   // Gunakan useAuth yang sudah ada
   const { user, isLoading: authLoading } = useAuth();
+  const ownerId = getOwnerId(user);
 
   useEffect(() => {
     if (user?.id) {
@@ -40,7 +42,7 @@ export default function OrdersPage() {
   }, [activeTab, user]);
 
   const fetchData = async () => {
-    if (!user?.id) return;
+    if (!ownerId) return;
     
     setLoading(true);
     
@@ -53,7 +55,7 @@ export default function OrdersPage() {
           restaurant_tables(table_number),
           order_items(id, quantity)
         `)
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .order('created_at', { ascending: false });
 
       if (activeTab === 'pending') {
@@ -83,7 +85,7 @@ export default function OrdersPage() {
       const { data: tablesData, error: tablesError } = await supabase
         .from('restaurant_tables')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .eq('is_available', true)
         .order('table_number');
 
@@ -97,7 +99,7 @@ export default function OrdersPage() {
       const { data: menuData, error: menuError } = await supabase
         .from('menu_items')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .eq('is_available', true)
         .order('name');
 
@@ -114,7 +116,7 @@ export default function OrdersPage() {
   };
 
   const createOrder = async (orderData: any) => {
-    if (!user?.id) return;
+    if (!ownerId) return;
     
     // FIX: Pisahkan 'items' dari data order utama, karena 'items' tidak ada di tabel 'orders'
     const { items, ...orderFields } = orderData;
@@ -134,7 +136,7 @@ export default function OrdersPage() {
       .insert({
         ...orderFields, // Masukkan field lain (table_id, customer_name, dll) kecuali items
         order_number: orderNumber,
-        user_id: user.id,
+        user_id: ownerId,
         status: 'pending',
         subtotal: subtotal,
         tax_percentage: taxPercentage,
@@ -214,7 +216,7 @@ export default function OrdersPage() {
     return (
       <div className="max-w-7xl mx-auto py-8">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Memuat data order...</p>
         </div>
       </div>
@@ -239,7 +241,7 @@ export default function OrdersPage() {
         <h1 className="text-2xl font-bold text-gray-900">Manajemen Order</h1>
         <button
           onClick={() => setShowOrderModal(true)}
-          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+          className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
         >
           + Order Baru
         </button>
@@ -251,7 +253,7 @@ export default function OrdersPage() {
             onClick={() => setActiveTab('pending')}
             className={`py-2 px-4 font-medium text-sm ${
               activeTab === 'pending'
-                ? 'border-b-2 border-blue-500 text-blue-600'
+                ? 'border-b-2 border-primary text-primary'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -261,7 +263,7 @@ export default function OrdersPage() {
             onClick={() => setActiveTab('completed')}
             className={`py-2 px-4 font-medium text-sm ${
               activeTab === 'completed'
-                ? 'border-b-2 border-blue-500 text-blue-600'
+                ? 'border-b-2 border-primary text-primary'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -281,7 +283,7 @@ export default function OrdersPage() {
           </p>
           <button
             onClick={() => setShowOrderModal(true)}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+            className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
           >
             + Buat Order Pertama
           </button>
@@ -335,14 +337,14 @@ export default function OrdersPage() {
                     setSelectedOrder(order);
                     setShowInvoiceModal(true);
                   }}
-                  className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                  className="flex-1 px-3 py-2 bg-primary text-white text-sm rounded hover:bg-primary/90"
                 >
                   Lihat Detail
                 </button>
                 {order.status !== 'completed' && (
                   <button
                     onClick={() => completeOrder(order.id)}
-                    className="flex-1 px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                    className="flex-1 px-3 py-2 bg-primary text-white text-sm rounded hover:bg-primary/90"
                   >
                     Selesaikan
                   </button>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { getOwnerId } from '@/lib/user-scope';
 import { PlusIcon, PencilIcon, TrashIcon, PhotoIcon } from '@heroicons/react/24/outline';
 
 type MenuItem = {
@@ -63,6 +64,7 @@ export default function MenuPage() {
   });
 
   const { user } = useAuth();
+  const ownerId = getOwnerId(user);
 
   // Filtered items logic
   const filteredItems = useMemo(() => {
@@ -82,12 +84,13 @@ export default function MenuPage() {
   }, [menuItems, selectedCategory, searchTerm]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !ownerId) return;
     fetchData();
   }, [user]);
 
   const fetchData = async () => {
-    if (!user) return;
+    if (!user || !ownerId) return;
+    if (!ownerId) return;
     
     try {
       setLoading(true);
@@ -96,7 +99,7 @@ export default function MenuPage() {
       const { data: categoriesData, error: catError } = await supabase
         .from('menu_categories')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .order('display_order');
 
       if (catError) {
@@ -112,7 +115,7 @@ export default function MenuPage() {
           *,
           menu_categories!inner(name)
         `)
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .order('name');
 
       if (itemsError) {
@@ -137,7 +140,7 @@ export default function MenuPage() {
 
     const itemData = {
       ...itemForm,
-      user_id: user.id,
+      user_id: ownerId,
       price: parseFloat(itemForm.price) || 0,
       cost_price: parseFloat(itemForm.cost_price) || 0,
       preparation_time: parseInt(itemForm.preparation_time) || 0,
@@ -190,7 +193,7 @@ export default function MenuPage() {
           .from('menu_categories')
           .insert({
             ...categoryForm,
-            user_id: user.id,
+            user_id: ownerId,
           });
 
         if (error) throw error;
@@ -312,7 +315,7 @@ export default function MenuPage() {
     return (
       <div className="max-w-7xl mx-auto py-8">
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
       </div>
     );
@@ -334,7 +337,7 @@ export default function MenuPage() {
               setEditingCategory(null);
               setShowCategoryModal(true);
             }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 flex items-center"
           >
             <PlusIcon className="w-5 h-5 mr-2" />
             Tambah Kategori
@@ -362,7 +365,7 @@ export default function MenuPage() {
                 <div className="flex space-x-2">
                   <button
                     onClick={() => editCategory(category)}
-                    className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                    className="p-1 text-primary hover:bg-primary/10 rounded"
                   >
                     <PencilIcon className="w-4 h-4" />
                   </button>
@@ -396,13 +399,13 @@ export default function MenuPage() {
               placeholder="Cari item menu..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
             />
             
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
             >
               <option value="all">Semua Kategori</option>
               {categories.map(category => (
@@ -418,7 +421,7 @@ export default function MenuPage() {
                 resetItemForm();
                 setShowItemModal(true);
               }}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center"
+              className="px-4 py-2 bg-secondary text-white rounded-lg hover:bg-secondary/90 flex items-center justify-center"
             >
               <PlusIcon className="w-5 h-5 mr-2" />
               Tambah Item
@@ -483,7 +486,7 @@ export default function MenuPage() {
                                 {item.tags.map((tag, index) => (
                                   <span
                                     key={index}
-                                    className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
+                                    className="inline-block px-2 py-1 text-xs bg-primary/10 text-primary rounded-full"
                                   >
                                     {tag}
                                   </span>
@@ -529,7 +532,7 @@ export default function MenuPage() {
                         <div className="flex space-x-3">
                           <button
                             onClick={() => editItem(item)}
-                            className="text-blue-600 hover:text-blue-900"
+                            className="text-primary hover:text-primary"
                           >
                             Edit
                           </button>
@@ -580,7 +583,7 @@ export default function MenuPage() {
                       required
                       value={itemForm.name}
                       onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                     />
                   </div>
 
@@ -592,7 +595,7 @@ export default function MenuPage() {
                       value={itemForm.description}
                       onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                     />
                   </div>
 
@@ -607,7 +610,7 @@ export default function MenuPage() {
                       step="100"
                       value={itemForm.price}
                       onChange={(e) => setItemForm({ ...itemForm, price: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                     />
                   </div>
 
@@ -621,7 +624,7 @@ export default function MenuPage() {
                       step="100"
                       value={itemForm.cost_price}
                       onChange={(e) => setItemForm({ ...itemForm, cost_price: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                     />
                   </div>
 
@@ -633,7 +636,7 @@ export default function MenuPage() {
                       type="text"
                       value={itemForm.sku}
                       onChange={(e) => setItemForm({ ...itemForm, sku: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                       placeholder="Kode stok (opsional)"
                     />
                   </div>
@@ -647,7 +650,7 @@ export default function MenuPage() {
                       min="0"
                       value={itemForm.preparation_time}
                       onChange={(e) => setItemForm({ ...itemForm, preparation_time: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                     />
                   </div>
 
@@ -658,7 +661,7 @@ export default function MenuPage() {
                     <select
                       value={itemForm.category_id}
                       onChange={(e) => setItemForm({ ...itemForm, category_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                       required
                     >
                       <option value="">Pilih Kategori</option>
@@ -678,7 +681,7 @@ export default function MenuPage() {
                       type="url"
                       value={itemForm.image_url}
                       onChange={(e) => setItemForm({ ...itemForm, image_url: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                       placeholder="https://example.com/image.jpg"
                     />
                   </div>
@@ -691,7 +694,7 @@ export default function MenuPage() {
                       type="text"
                       value={itemForm.tags}
                       onChange={(e) => setItemForm({ ...itemForm, tags: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                       placeholder="spicy, vegan, bestseller"
                     />
                   </div>
@@ -703,7 +706,7 @@ export default function MenuPage() {
                         id="is_available"
                         checked={itemForm.is_available}
                         onChange={(e) => setItemForm({ ...itemForm, is_available: e.target.checked })}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-primary focus:ring-primary/30 border-gray-300 rounded"
                       />
                       <label htmlFor="is_available" className="ml-2 text-sm text-gray-700">
                         Tersedia
@@ -716,7 +719,7 @@ export default function MenuPage() {
                         id="is_featured"
                         checked={itemForm.is_featured}
                         onChange={(e) => setItemForm({ ...itemForm, is_featured: e.target.checked })}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-primary focus:ring-primary/30 border-gray-300 rounded"
                       />
                       <label htmlFor="is_featured" className="ml-2 text-sm text-gray-700">
                         Featured Item
@@ -735,7 +738,7 @@ export default function MenuPage() {
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
                   >
                     {editingItem ? 'Update Item' : 'Tambah Item'}
                   </button>
@@ -775,7 +778,7 @@ export default function MenuPage() {
                     required
                     value={categoryForm.name}
                     onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                   />
                 </div>
 
@@ -787,7 +790,7 @@ export default function MenuPage() {
                     value={categoryForm.description}
                     onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                   />
                 </div>
 
@@ -799,7 +802,7 @@ export default function MenuPage() {
                     type="number"
                     value={categoryForm.display_order}
                     onChange={(e) => setCategoryForm({ ...categoryForm, display_order: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                   />
                 </div>
 
@@ -809,7 +812,7 @@ export default function MenuPage() {
                     id="category_active"
                     checked={categoryForm.is_active}
                     onChange={(e) => setCategoryForm({ ...categoryForm, is_active: e.target.checked })}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-primary focus:ring-primary/30 border-gray-300 rounded"
                   />
                   <label htmlFor="category_active" className="ml-2 text-sm text-gray-700">
                     Kategori Aktif
@@ -826,7 +829,7 @@ export default function MenuPage() {
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
                   >
                     {editingCategory ? 'Update Kategori' : 'Tambah Kategori'}
                   </button>

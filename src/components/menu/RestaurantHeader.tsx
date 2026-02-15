@@ -47,6 +47,13 @@ export default function RestaurantHeader({ restaurant, settings }: RestaurantHea
       checkBusinessHours();
     }
 
+    // Apply theme colors
+    if (settings?.primary_color || settings?.secondary_color) {
+      const root = document.documentElement;
+      root.style.setProperty('--primary', settings.primary_color || '#3B82F6');
+      root.style.setProperty('--secondary', settings.secondary_color || '#10B981');
+    }
+
     // Update time every minute
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -207,36 +214,33 @@ export default function RestaurantHeader({ restaurant, settings }: RestaurantHea
             <nav className="hidden lg:flex items-center space-x-8">
               <Link
                 href={`/${restaurant?.restaurant_slug}`}
-                className={`text-sm font-medium transition-colors ${
-                  pathname === `/${restaurant?.restaurant_slug}`
-                    ? 'text-blue-600'
-                    : 'text-gray-700 hover:text-gray-900'
-                }`}
+                className={`text-sm font-medium transition-colors ${pathname === `/${restaurant?.restaurant_slug}`
+                  ? 'text-primary'
+                  : 'text-gray-700 hover:text-gray-900'
+                  }`}
               >
                 <HomeIcon className="w-4 h-4 inline mr-1" />
                 Beranda
               </Link>
-              
+
               <Link
                 href={`/${restaurant?.restaurant_slug}/menu`}
-                className={`text-sm font-medium transition-colors ${
-                  pathname.includes('/menu')
-                    ? 'text-blue-600'
-                    : 'text-gray-700 hover:text-gray-900'
-                }`}
+                className={`text-sm font-medium transition-colors ${pathname.includes('/menu')
+                  ? 'text-primary'
+                  : 'text-gray-700 hover:text-gray-900'
+                  }`}
               >
                 <QueueListIcon className="w-4 h-4 inline mr-1" />
                 Menu
               </Link>
-              
+
               {settings?.enable_online_orders && (
                 <Link
                   href={`/${restaurant?.restaurant_slug}/order`}
-                  className={`text-sm font-medium transition-colors ${
-                    pathname.includes('/order')
-                      ? 'text-blue-600'
-                      : 'text-gray-700 hover:text-gray-900'
-                  }`}
+                  className={`text-sm font-medium transition-colors ${pathname.includes('/order')
+                    ? 'text-primary'
+                    : 'text-gray-700 hover:text-gray-900'
+                    }`}
                 >
                   <ShoppingCartIcon className="w-4 h-4 inline mr-1" />
                   Order Online
@@ -387,7 +391,7 @@ export default function RestaurantHeader({ restaurant, settings }: RestaurantHea
                     <p className="text-gray-600">Keranjang Anda kosong</p>
                     <Link
                       href={`/${restaurant?.restaurant_slug}/menu`}
-                      className="inline-block mt-4 text-blue-600 hover:text-blue-700"
+                      className="inline-block mt-4 text-primary hover:text-primary/80"
                       onClick={() => setCartOpen(false)}
                     >
                       Lihat menu →
@@ -464,7 +468,7 @@ export default function RestaurantHeader({ restaurant, settings }: RestaurantHea
                   <div className="space-y-3">
                     <button
                       onClick={proceedToCheckout}
-                      className="w-full py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700"
+                      className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90"
                     >
                       Lanjut ke Checkout
                     </button>

@@ -1,10 +1,27 @@
 @import "tailwindcss";
 
+:root {
+  --primary: #3B82F6;
+  /* Default Blue */
+  --secondary: #10B981;
+  /* Default Green */
+}
+
+@theme {
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+}
+
 /* Optional: Tambahkan custom CSS atau override di sini */
 @layer utilities {
   /* Contoh custom utility kalau perlu */
   .custom-btn {
-    @apply px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700;
+    @apply px-4 py-2 text-white rounded transition-opacity;
+    background-color: var(--primary);
+  }
+
+  .custom-btn:hover {
+    opacity: 0.9;
   }
 }
 

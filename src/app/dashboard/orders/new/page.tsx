@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import OrderModal from '@/components/orders/OrderModal';
 import { useAuth } from '@/components/auth/AuthProvider'; // Tambahkan ini
+import { getOwnerId } from '@/lib/user-scope';
 
 export default function NewOrderPage() {
   const router = useRouter();
@@ -16,21 +17,22 @@ export default function NewOrderPage() {
   
   // Gunakan useAuth yang sudah ada
   const { user } = useAuth();
+  const ownerId = getOwnerId(user);
 
   useEffect(() => {
-    if (user?.id) {
+    if (ownerId) {
       fetchData();
     }
-  }, [user]);
+  }, [ownerId]);
 
   const fetchData = async () => {
-    if (!user?.id) return;
+    if (!ownerId) return;
     
     // Fetch tables
     const { data: tablesData } = await supabase
       .from('restaurant_tables')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', ownerId)
       .order('table_number');
 
     setTables(tablesData || []);
@@ -39,7 +41,7 @@ export default function NewOrderPage() {
     const { data: menuData } = await supabase
       .from('menu_items')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', ownerId)
       .eq('is_available', true)
       .order('name');
 
@@ -48,7 +50,7 @@ export default function NewOrderPage() {
   };
 
   const handleCreateOrder = async (orderData: any) => {
-    if (!user?.id) return;
+    if (!ownerId) return;
     
     // Generate order number
     const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
@@ -65,7 +67,7 @@ export default function NewOrderPage() {
       .insert({
         ...orderData,
         order_number: orderNumber,
-        user_id: user.id,
+        user_id: ownerId,
         status: 'pending',
         subtotal: subtotal,
         tax_percentage: taxPercentage,
@@ -109,7 +111,7 @@ export default function NewOrderPage() {
     return (
       <div className="max-w-7xl mx-auto py-8">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Memuat data...</p>
         </div>
       </div>

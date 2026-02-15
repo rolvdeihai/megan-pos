@@ -121,7 +121,7 @@ export default function InventoryPage() {
     return (
       <div className="max-w-7xl mx-auto py-8">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Memuat data inventory...</p>
         </div>
       </div>
@@ -155,7 +155,7 @@ export default function InventoryPage() {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
         >
           + Tambah Item
         </button>
@@ -176,7 +176,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, sku: e.target.value })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -190,7 +190,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -203,7 +203,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, category: e.target.value })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -215,7 +215,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, unit: e.target.value })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 >
                   <option value="pcs">Pieces</option>
                   <option value="kg">Kilogram</option>
@@ -234,7 +234,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, current_stock: parseFloat(e.target.value) })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -247,7 +247,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, minimum_stock: parseFloat(e.target.value) })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -260,7 +260,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, cost_per_unit: parseFloat(e.target.value) })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -273,14 +273,14 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, supplier: e.target.value })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
             </div>
             <div className="flex space-x-3">
               <button
                 type="submit"
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                className="px-4 py-2 bg-secondary text-white rounded-md hover:bg-secondary/90"
               >
                 Simpan
               </button>
@@ -376,7 +376,7 @@ export default function InventoryPage() {
                     </button>
                     <button
                       onClick={() => updateStock(item.id, 10)}
-                      className="text-blue-600 hover:text-blue-900"
+                      className="text-primary hover:text-primary"
                     >
                       +10
                     </button>

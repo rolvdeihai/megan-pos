@@ -7,11 +7,15 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 type StaffMember = {
   id: string;
   full_name: string;
+  email?: string | null;
   role: string;
+  role_id?: string | null;
+  role_name?: string | null;
   user_id: string;
   restaurant_slug: string;
   is_staff: boolean;
   user_type: 'staff' | 'owner';
+  permissions?: string[];
 };
 
 interface StaffContextType {

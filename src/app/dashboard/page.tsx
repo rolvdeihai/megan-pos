@@ -9,6 +9,8 @@ import {
   ChartBarIcon
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
+import { PERMISSIONS, hasPermission } from '@/lib/permissions';
+import { getUserRoleLabel } from '@/lib/navigation';
 
 type User = {
   id: string;
@@ -16,9 +18,11 @@ type User = {
   full_name: string;
   restaurant_name: string;
   restaurant_slug?: string;
-  role?: string;
+  role?: string | null;
+  role_name?: string | null;
   is_staff?: boolean;
   user_type: 'owner' | 'staff';
+  permissions?: string[];
 };
 
 export default function DashboardPage() {
@@ -83,148 +87,124 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
-  const isStaff = user.is_staff || user.user_type === 'staff';
+  const permissions = user.permissions ?? (user.user_type === 'owner' ? ['*'] : []);
+  const roleLabel = getUserRoleLabel(user);
+
+  const quickActions = [
+    { label: 'Buat Order', href: '/dashboard/orders', color: 'text-primary', permission: PERMISSIONS.MANAGE_ORDERS },
+    { label: 'Kelola Menu', href: '/dashboard/menu', color: 'text-emerald-600', permission: PERMISSIONS.MANAGE_MENU },
+    { label: 'Kelola Meja', href: '/dashboard/tables', color: 'text-purple-600', permission: PERMISSIONS.MANAGE_ORDERS },
+    { label: 'Transaksi', href: '/dashboard/transactions', color: 'text-orange-600', permission: PERMISSIONS.VIEW_REPORTS },
+    { label: 'Orderan Online', href: '/dashboard/public-orders', color: 'text-indigo-600', permission: PERMISSIONS.MANAGE_ORDERS },
+    { label: 'Pegawai', href: '/dashboard/employees', color: 'text-rose-600', permission: PERMISSIONS.MANAGE_STAFF },
+    { label: 'Billing', href: '/dashboard/billing', color: 'text-amber-600', permission: PERMISSIONS.MANAGE_BILLING },
+    { label: 'Pengaturan', href: '/dashboard/settings', color: 'text-slate-600', permission: PERMISSIONS.MANAGE_SETTINGS },
+  ];
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-4">
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              Selamat Datang, {user.full_name || 'Admin'}!
-            </h1>
-            <p className="mt-2 text-gray-600">
-              {new Date().toLocaleDateString('id-ID', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </p>
-          </div>
-          {isStaff && (
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-              👨‍🍳 {user.role?.toUpperCase() || 'STAFF'}
-            </span>
-          )}
+      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-primary">Ringkasan hari ini</p>
+          <h1 className="text-3xl font-bold text-slate-900">
+            Selamat datang, {user.full_name || 'Admin'}!
+          </h1>
+          <p className="mt-2 text-slate-600">
+            {new Date().toLocaleDateString('id-ID', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            })}
+          </p>
+        </div>
+        <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 shadow-sm">
+          <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+          <span className="text-sm font-semibold text-slate-700">
+            {roleLabel}
+          </span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow p-6">
+        <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Pendapatan</p>
-              <p className="text-2xl font-bold text-gray-900 mt-2">
+              <p className="text-sm font-medium text-slate-500">Total Pendapatan</p>
+              <p className="text-2xl font-bold text-slate-900 mt-2">
                 {formatCurrency(stats.totalRevenue)}
               </p>
             </div>
-            <CurrencyDollarIcon className="w-8 h-8 text-green-600" />
+            <div className="h-12 w-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+              <CurrencyDollarIcon className="w-6 h-6" />
+            </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow p-6">
+        <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Order</p>
-              <p className="text-2xl font-bold text-gray-900 mt-2">
+              <p className="text-sm font-medium text-slate-500">Total Order</p>
+              <p className="text-2xl font-bold text-slate-900 mt-2">
                 {stats.totalOrders}
               </p>
             </div>
-            <ShoppingBagIcon className="w-8 h-8 text-blue-600" />
+            <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+              <ShoppingBagIcon className="w-6 h-6" />
+            </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow p-6">
+        <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Meja Aktif</p>
-              <p className="text-2xl font-bold text-gray-900 mt-2">
+              <p className="text-sm font-medium text-slate-500">Meja Aktif</p>
+              <p className="text-2xl font-bold text-slate-900 mt-2">
                 {stats.activeTables}
               </p>
             </div>
-            <UsersIcon className="w-8 h-8 text-purple-600" />
+            <div className="h-12 w-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+              <UsersIcon className="w-6 h-6" />
+            </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow p-6">
+        <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Hari Ini</p>
-              <p className="text-2xl font-bold text-gray-900 mt-2">
+              <p className="text-sm font-medium text-slate-500">Hari Ini</p>
+              <p className="text-2xl font-bold text-slate-900 mt-2">
                 {formatCurrency(stats.todayRevenue)}
               </p>
             </div>
-            <ChartBarIcon className="w-8 h-8 text-orange-600" />
+            <div className="h-12 w-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
+              <ChartBarIcon className="w-6 h-6" />
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-8 bg-white rounded-xl shadow p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Aksi Cepat</h2>
+      <div className="mt-10 bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Aksi Cepat</h2>
+            <p className="text-sm text-slate-500">Akses fitur sesuai izin yang dimiliki</p>
+          </div>
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* Buat Order - Tampilkan untuk semua */}
-          <a href="/dashboard/orders" className="text-center p-4 border rounded-lg hover:bg-blue-50 hover:border-blue-200 transition-colors">
-            <div className="text-blue-600 font-semibold">Buat Order</div>
-          </a>
-          
-          {/* Kelola Menu - Tampilkan untuk owner atau staff dengan role tertentu */}
-          {(!isStaff || (user.role === 'manager' || user.role === 'admin')) && (
-            <a href="/dashboard/menu" className="text-center p-4 border rounded-lg hover:bg-green-50 hover:border-green-200 transition-colors">
-              <div className="text-green-600 font-semibold">Kelola Menu</div>
-            </a>
-          )}
-          
-          {/* Kelola Meja - Tampilkan untuk owner atau staff dengan role tertentu */}
-          {(!isStaff || (user.role === 'manager' || user.role === 'admin')) && (
-            <a href="/dashboard/tables" className="text-center p-4 border rounded-lg hover:bg-purple-50 hover:border-purple-200 transition-colors">
-              <div className="text-purple-600 font-semibold">Kelola Meja</div>
-            </a>
-          )}
-          
-          {/* Transaksi - Tampilkan untuk semua */}
-          <a href="/dashboard/transactions" className="text-center p-4 border rounded-lg hover:bg-orange-50 hover:border-orange-200 transition-colors">
-            <div className="text-orange-600 font-semibold">Transaksi</div>
-          </a>
-
-          {/* Orderan Online - Tampilkan untuk semua */}
-          <a href="/dashboard/public-orders" className="text-center p-4 border rounded-lg hover:bg-indigo-50 hover:border-indigo-200 transition-colors">
-            <div className="text-indigo-600 font-semibold">Orderan Online</div>
-          </a>
-
-          {/* Pegawai - Hanya untuk owner */}
-          {!isStaff && (
-            <a href="/dashboard/employees" className="text-center p-4 border rounded-lg hover:bg-rose-50 hover:border-rose-200 transition-colors">
-              <div className="text-rose-600 font-semibold">Pegawai</div>
-            </a>
-          )}
-
-          {/* Billing - Hanya untuk owner */}
-          {!isStaff && (
-            <a href="/dashboard/billing" className="text-center p-4 border rounded-lg hover:bg-amber-50 hover:border-amber-200 transition-colors">
-              <div className="text-amber-600 font-semibold">Billing</div>
-            </a>
-          )}
-
-          {/* Pengaturan - Hanya untuk owner */}
-          {!isStaff && (
-            <a href="/dashboard/settings" className="text-center p-4 border rounded-lg hover:bg-slate-50 hover:border-slate-200 transition-colors">
-              <div className="text-slate-600 font-semibold">Pengaturan</div>
-            </a>
-          )}
-
-          {/* Logout Button untuk Staff */}
-          {isStaff && (
-            <button 
-              onClick={async () => {
-                await fetch('/api/staff/logout', { method: 'POST' });
-                window.location.href = `/${user.restaurant_slug}`;
-              }}
-              className="text-center p-4 border rounded-lg hover:bg-red-50 hover:border-red-200 transition-colors"
-            >
-              <div className="text-red-600 font-semibold">Logout Staff</div>
-            </button>
-          )}
+          {quickActions
+            .filter((action) => hasPermission(permissions, action.permission))
+            .map((action) => (
+              <a
+                key={action.href}
+                href={action.href}
+                className="group text-center p-4 border border-slate-200/70 rounded-xl hover:bg-slate-50 hover:border-slate-200 transition-colors"
+              >
+                <div className={`font-semibold ${action.color} group-hover:opacity-90`}>
+                  {action.label}
+                </div>
+              </a>
+            ))}
         </div>
       </div>
     </div>

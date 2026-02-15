@@ -1,79 +1,90 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { getLegacyRolePermissions, getRequiredPermissionForPath, hasPermission } from '@/lib/permissions';
+import { parseJsonCookie } from '@/lib/cookie-utils';
 
 export function middleware(request: NextRequest) {
   const ownerToken = request.cookies.get('megan_pos_auth');
   const staffToken = request.cookies.get('megan_pos_staff');
   const { pathname } = request.nextUrl;
 
-  // Debug log
-  console.log(`[Middleware] Path: ${pathname}, Owner Token: ${!!ownerToken}, Staff Token: ${!!staffToken}`);
-
   // Public paths yang tidak perlu auth
   const publicPaths = [
-    '/login', 
-    '/register', 
-    '/', 
-    '/api/auth/login', 
-    '/api/auth/logout', 
+    '/login',
+    '/register',
+    '/',
+    '/api/auth/login',
+    '/api/auth/logout',
     '/api/auth/me',
+    '/api/auth/current',
     '/api/staff/login',
     '/api/staff/logout',
-    '/api/staff/session'
+    '/api/staff/session',
   ];
-  
-  const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
-  
+
+  const isPublicPath = publicPaths.some((path) => pathname.startsWith(path));
+
   // Path staff login (misal: /resto-slug/staff-login)
   const staffLoginPath = /^\/[^\/]+\/staff-login$/;
-  
-  // Protected routes untuk owner only
-  const ownerOnlyRoutes = [
-    '/dashboard/settings',
-    '/dashboard/employees',
-    '/dashboard/billing',
-    '/setup-restaurant'
-  ];
+
+  // Owner-only routes (non-dashboard)
+  const ownerOnlyRoutes = ['/setup-restaurant'];
 
   // Allow staff login page
   if (staffLoginPath.test(pathname)) {
-    console.log(`[Middleware] Staff login page, allowing access`);
     return NextResponse.next();
-  }
-
-  // Check owner-only routes
-  const isOwnerOnlyRoute = ownerOnlyRoutes.some(route => pathname.startsWith(route));
-  
-  if (isOwnerOnlyRoute) {
-    console.log(`[Middleware] Owner-only route: ${pathname}`);
-    if (!ownerToken) {
-      console.log(`[Middleware] No owner token, redirecting to login`);
-      const loginUrl = new URL('/login', request.url);
-      loginUrl.searchParams.set('redirect', pathname);
-      return NextResponse.redirect(loginUrl);
-    }
   }
 
   // Check dashboard routes (allow both owner and staff)
   if (pathname.startsWith('/dashboard')) {
-    console.log(`[Middleware] Dashboard route: ${pathname}`);
-    
     // Jika tidak ada token sama sekali
     if (!ownerToken && !staffToken) {
-      console.log(`[Middleware] No auth tokens, redirecting to login`);
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('redirect', pathname);
       return NextResponse.redirect(loginUrl);
     }
-    
-    // Jika ada salah satu token, izinkan akses
-    console.log(`[Middleware] Auth token found, allowing access`);
-    return NextResponse.next();
+
+    // Owner always has full access
+    if (ownerToken) {
+      return NextResponse.next();
+    }
+
+    // Staff permission check
+    const requiredPermission = getRequiredPermissionForPath(pathname);
+    if (!requiredPermission) {
+      return NextResponse.next();
+    }
+
+    try {
+      const staffData = parseJsonCookie<{ permissions?: string[]; role?: string }>(staffToken?.value);
+      const hasPermissionsField = Array.isArray(staffData?.permissions);
+      const staffPermissions = hasPermissionsField
+        ? (staffData?.permissions as string[])
+        : getLegacyRolePermissions(staffData?.role);
+
+      if (hasPermission(staffPermissions, requiredPermission)) {
+        return NextResponse.next();
+      }
+    } catch (error) {
+      console.error('[Middleware] Failed to parse staff token:', error);
+    }
+
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
+  // Check owner-only routes (non-dashboard)
+  const isOwnerOnlyRoute = ownerOnlyRoutes.some((route) => pathname.startsWith(route));
+
+  if (isOwnerOnlyRoute) {
+    if (!ownerToken) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
   }
 
   // Untuk rute lain yang dilindungi (selain dashboard) hanya untuk owner
   if (!ownerToken && !isPublicPath) {
-    console.log(`[Middleware] No owner token for protected route, redirect to login from ${pathname}`);
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
@@ -81,7 +92,6 @@ export function middleware(request: NextRequest) {
 
   // Jika sudah login sebagai owner tapi akses login/register page
   if (ownerToken && (pathname === '/login' || pathname === '/register')) {
-    console.log(`[Middleware] Already logged in as owner, redirect to dashboard from ${pathname}`);
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
@@ -99,5 +109,5 @@ export const config = {
     '/login',
     '/register',
     '/:slug/staff-login',
-  ]
+  ],
 };

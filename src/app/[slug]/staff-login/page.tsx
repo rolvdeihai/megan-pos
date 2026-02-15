@@ -50,14 +50,17 @@ export default function StaffLoginPage({ params }: PageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center">
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-100 flex items-center justify-center p-4 overflow-hidden">
+      <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-indigo-200/40 blur-3xl"></div>
+      <div className="pointer-events-none absolute -bottom-32 -left-16 h-72 w-72 rounded-full bg-blue-200/50 blur-3xl"></div>
+
+      <div className="relative bg-white/90 backdrop-blur p-8 rounded-3xl shadow-xl w-full max-w-md text-center border border-white/60">
         <div className="mb-6">
-          <div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/20">
             <span className="text-3xl">👨‍🍳</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Staff Login</h1>
-          <p className="text-gray-500 mt-2">Masukkan 4 digit PIN Anda</p>
+          <h1 className="text-2xl font-bold text-slate-900">Staff Login</h1>
+          <p className="text-slate-500 mt-2">Masukkan 4 digit PIN Anda</p>
           <p className="text-xs text-indigo-600 font-semibold mt-1 uppercase tracking-wider">{slug}</p>
         </div>
 
@@ -70,8 +73,8 @@ export default function StaffLoginPage({ params }: PageProps) {
                 maxLength={1}
                 inputMode="numeric"
                 autoFocus={index === 0}
-                className={`w-16 h-20 text-3xl text-center border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${
-                  error ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                className={`w-16 h-20 text-3xl text-center border-2 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${
+                  error ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white'
                 }`}
                 value={pin[index] || ''}
                 onChange={(e) => {
@@ -98,14 +101,14 @@ export default function StaffLoginPage({ params }: PageProps) {
 
           {error && (
             <p className="text-red-500 text-sm font-medium">
-              PIN Salah atau Karyawan tidak aktif
+              PIN salah atau karyawan tidak aktif
             </p>
           )}
 
           <button
             type="submit"
             disabled={loading || pin.length !== 4}
-            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-600/20"
           >
             {loading ? 'Memproses...' : 'Masuk ke Dashboard'}
           </button>
@@ -114,7 +117,7 @@ export default function StaffLoginPage({ params }: PageProps) {
         <div className="mt-6">
             <button 
                 onClick={() => router.push(`/${slug}`)}
-                className="text-sm text-gray-400 hover:text-gray-600"
+                className="text-sm text-slate-400 hover:text-slate-600"
             >
                 &larr; Kembali ke Menu
             </button>

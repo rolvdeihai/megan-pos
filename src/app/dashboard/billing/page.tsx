@@ -139,7 +139,7 @@ export default function BillingPage() {
     return (
       <div className="max-w-7xl mx-auto py-8">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Memuat data billing...</p>
         </div>
       </div>
@@ -167,13 +167,13 @@ export default function BillingPage() {
         </p>
         
         {currentSubscription && (
-          <div className="mt-6 inline-flex items-center px-4 py-2 bg-blue-50 border border-blue-200 rounded-full">
-            <span className="text-blue-800 font-medium mr-2">Paket Aktif:</span>
-            <span className="text-blue-600 font-bold uppercase">
+          <div className="mt-6 inline-flex items-center px-4 py-2 bg-primary/10 border border-blue-200 rounded-full">
+            <span className="text-primary font-medium mr-2">Paket Aktif:</span>
+            <span className="text-primary font-bold uppercase">
               {currentSubscription.packages?.name || 'Unknown'}
             </span>
             <span className="mx-2 text-blue-300">|</span>
-            <span className="text-blue-600 text-sm">
+            <span className="text-primary text-sm">
               Berlaku sampai: {new Date(currentSubscription.end_date).toLocaleDateString('id-ID')}
             </span>
           </div>
@@ -189,7 +189,7 @@ export default function BillingPage() {
               key={pkg.id}
               className={`rounded-lg border-2 p-6 transition-all ${
                 selectedPackage === pkg.id
-                  ? 'border-blue-500 bg-blue-50 shadow-lg scale-105'
+                  ? 'border-primary bg-primary/10 shadow-lg scale-105'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
@@ -225,7 +225,7 @@ export default function BillingPage() {
                 disabled={isCurrentPlan}
                 className={`mt-8 w-full py-2 rounded-md font-medium transition-colors ${
                   selectedPackage === pkg.id
-                    ? 'bg-blue-600 text-white shadow-md'
+                    ? 'bg-primary text-white shadow-md'
                     : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
                 } ${isCurrentPlan ? 'cursor-default opacity-75' : ''}`}
               >
@@ -240,7 +240,7 @@ export default function BillingPage() {
         <button
           onClick={handleSubscribe}
           disabled={loading || currentSubscription?.package_id === selectedPackage}
-          className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+          className="px-8 py-3 bg-secondary text-white rounded-lg hover:bg-secondary/90 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
         >
           {loading ? 'Memproses...' : (currentSubscription?.package_id === selectedPackage ? 'Sudah Berlangganan' : 'Lanjut & Bayar')}
         </button>

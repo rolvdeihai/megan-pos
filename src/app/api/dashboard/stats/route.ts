@@ -1,14 +1,19 @@
 // app/api/dashboard/stats/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { parseJsonCookie } from '@/lib/cookie-utils';
 
 export async function GET(request: NextRequest) {
   const cookie = request.cookies.get('megan_pos_auth');
   if (!cookie) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const authData = JSON.parse(cookie.value);
-    const userId = authData.userId;
+    const authData = parseJsonCookie<{ userId?: string }>(cookie.value);
+    const userId = authData?.userId;
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     // Stats sederhana
     const [revenueResult, ordersResult, tablesResult] = await Promise.all([

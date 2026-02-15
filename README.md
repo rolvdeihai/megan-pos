@@ -1,24 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Megan POS
+
+Megan POS adalah aplikasi Point of Sale untuk restoran dengan dashboard owner/staff, menu publik, dan order online. Fitur utama:
+- Dashboard manajemen order, menu, meja, inventory, transaksi, billing, dan settings
+- Public menu & order page berdasarkan `restaurant_slug`
+- Staff login via PIN
+- RBAC permission untuk staff
+- Theming berbasis `restaurant_settings` (warna primary/secondary)
 
 ## Getting Started
 
-First, run the development server:
+### 1) Install dependencies
+
+```bash
+npm install
+```
+
+### 2) Env vars
+
+Buat file `.env.local` di root:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
+
+### 3) Run dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Public URLs
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Landing / root: `/`
+- Public menu: `/{restaurant_slug}/menu`
+- Public order: `/{restaurant_slug}`
+- Staff login: `/{restaurant_slug}/staff-login`
+
+`restaurant_slug` disimpan di tabel `users`.
+
+## Theme (Primary/Secondary)
+
+Warna tema disimpan di `restaurant_settings`:
+- `primary_color`
+- `secondary_color`
+
+Aturan:
+- Dashboard & public pages memakai theme berdasarkan owner/slug.
+- Auth/onboarding (login/register/setup) tetap default, tidak pakai theme.
+
+## RBAC singkat
+
+Staff permissions dibaca dari:
+- `roles`
+- `role_permissions`
+- `permissions`
+
+Fallback legacy role masih disupport untuk role lama.
+
+## Supabase & Migrations
+
+Skema database ada di `supabase/migrations`.  
+Jika ada perubahan schema, commit file migration ke git agar tim lain bisa sync.
+
+Perintah berguna:
+
+```bash
+# Push schema (butuh Supabase CLI setup)
+npm run supabase:push
+
+# Generate types
+npm run supabase:generate
+```
 
 ## Learn More
 
