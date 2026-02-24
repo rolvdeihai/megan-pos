@@ -6,8 +6,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider'; // Import useAuth
-import { createPaymentInvoice, simulatePaymentSuccess, simulatePaymentFailure } from './actions';
 import { isSimulationMode } from '@/lib/xendit';
+import { simulatePaymentSuccess, simulatePaymentFailure } from './actions';
 import toast from 'react-hot-toast';
 
 const packages = [
@@ -51,11 +51,9 @@ const packages = [
 
 export default function BillingPage() {
   const [selectedPackage, setSelectedPackage] = useState<string>('pro');
-  const [loading, setLoading] = useState(false);
   const [currentSubscription, setCurrentSubscription] = useState<any>(null);
-  const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null);
-  const [pendingSubscriptionId, setPendingSubscriptionId] = useState<string | null>(null);
   const [showSimulation, setShowSimulation] = useState(false);
+  const [simSubscriptionId, setSimSubscriptionId] = useState<string | null>(null);
 
   const router = useRouter();
   // Gunakan useAuth hook
@@ -105,85 +103,54 @@ export default function BillingPage() {
     }
   };
 
-  const handleSubscribe = async () => {
-    if (!user?.id) {
-      toast.error('Anda harus login terlebih dahulu');
-      return;
-    }
-
-    if (currentSubscription?.package_id === selectedPackage) {
-      toast('Anda sudah berada di paket ini', { icon: 'ℹ️' });
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const result = await createPaymentInvoice(
-        user.id,
-        selectedPackage,
-        user.email || '',
-        user.full_name || user.email || 'User'
-      );
-
-      if (!result.success) {
-        toast.error(result.error || 'Gagal membuat invoice');
-        return;
-      }
-
-      if (result.invoiceUrl === '#simulate-payment') {
-        // Simulation mode - show simulation UI
-        setInvoiceUrl(result.invoiceUrl);
-        setPendingSubscriptionId(result.subscriptionId || null);
-        setShowSimulation(true);
-        toast('Mode simulasi: Pilih hasil pembayaran di bawah', { icon: '🧪' });
-      } else if (result.invoiceUrl) {
-        // Real mode - redirect to Xendit
-        window.location.href = result.invoiceUrl;
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      toast.error('Terjadi kesalahan. Silakan coba lagi.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSimulateSuccess = async () => {
-    if (!pendingSubscriptionId) return;
+    if (!simSubscriptionId) {
+      toast.error('Silakan pilih paket dan buat subscription simulasi terlebih dahulu');
+      return;
+    }
 
-    setLoading(true);
-    const result = await simulatePaymentSuccess(pendingSubscriptionId);
+    const result = await simulatePaymentSuccess(simSubscriptionId);
 
     if (result.success) {
       toast.success('Simulasi: Pembayaran berhasil!');
       setShowSimulation(false);
-      setInvoiceUrl(null);
-      setPendingSubscriptionId(null);
+      setSimSubscriptionId(null);
       await fetchCurrentSubscription();
     } else {
       toast.error(result.error || 'Simulasi gagal');
     }
-
-    setLoading(false);
   };
 
   const handleSimulateFailure = async () => {
-    if (!pendingSubscriptionId) return;
+    if (!simSubscriptionId) {
+      toast.error('Silakan pilih paket dan buat subscription simulasi terlebih dahulu');
+      return;
+    }
 
-    setLoading(true);
-    const result = await simulatePaymentFailure(pendingSubscriptionId);
+    const result = await simulatePaymentFailure(simSubscriptionId);
 
     if (result.success) {
       toast.error('Simulasi: Pembayaran gagal/expired');
       setShowSimulation(false);
-      setInvoiceUrl(null);
-      setPendingSubscriptionId(null);
+      setSimSubscriptionId(null);
     } else {
       toast.error(result.error || 'Simulasi gagal');
     }
+  };
 
-    setLoading(false);
+  const createSimulatedSubscription = async () => {
+    if (!user?.id) return;
+
+    try {
+      const { createPendingSubscription } = await import('@/lib/subscription');
+      const subscription = await createPendingSubscription(user.id, selectedPackage);
+      setSimSubscriptionId(subscription.id);
+      setShowSimulation(true);
+      toast.success('Subscription simulasi dibuat. Pilih hasil pembayaran.');
+    } catch (error) {
+      console.error('Error creating sim subscription:', error);
+      toast.error('Gagal membuat subscription simulasi');
+    }
   };
 
   // Tampilkan loading jika auth masih loading
@@ -289,38 +256,55 @@ export default function BillingPage() {
       </div>
 
       <div className="mt-12 text-center">
-        <button
-          onClick={handleSubscribe}
-          disabled={loading || currentSubscription?.package_id === selectedPackage}
-          className="px-8 py-3 bg-secondary text-white rounded-lg hover:bg-secondary/90 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-        >
-          {loading ? 'Memproses...' : (currentSubscription?.package_id === selectedPackage ? 'Sudah Berlangganan' : 'Lanjut & Bayar')}
-        </button>
+        {currentSubscription?.package_id === selectedPackage ? (
+          <button
+            disabled
+            className="px-8 py-3 bg-gray-400 text-white rounded-lg font-medium cursor-default"
+          >
+            Sudah Berlangganan
+          </button>
+        ) : (
+          <a
+            href={`/checkout?package=${selectedPackage}`}
+            className="inline-block px-8 py-3 bg-secondary text-white rounded-lg hover:bg-secondary/90 font-medium transition-colors"
+          >
+            Lanjut ke Checkout
+          </a>
+        )}
 
-        {showSimulation && (
-          <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg max-w-md mx-auto">
-            <p className="text-sm text-yellow-800 font-medium mb-3">
-              🧪 Mode Simulasi (Development Only)
-            </p>
-            <p className="text-xs text-yellow-700 mb-4">
-              Pilih hasil pembayaran untuk mensimulasikan response dari Xendit:
-            </p>
-            <div className="flex gap-3 justify-center">
+        {isSimulationMode() && currentSubscription?.package_id !== selectedPackage && (
+          <div className="mt-4">
+            {!showSimulation ? (
               <button
-                onClick={handleSimulateSuccess}
-                disabled={loading}
-                className="px-4 py-2 bg-green-500 text-white rounded-md text-sm hover:bg-green-600 disabled:opacity-50"
+                onClick={createSimulatedSubscription}
+                className="text-sm text-yellow-600 hover:text-yellow-700 underline"
               >
-                ✓ Pembayaran Sukses
+                🧪 Buat Subscription Simulasi
               </button>
-              <button
-                onClick={handleSimulateFailure}
-                disabled={loading}
-                className="px-4 py-2 bg-red-500 text-white rounded-md text-sm hover:bg-red-600 disabled:opacity-50"
-              >
-                ✗ Pembayaran Gagal
-              </button>
-            </div>
+            ) : (
+              <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg max-w-md mx-auto">
+                <p className="text-sm text-yellow-800 font-medium mb-3">
+                  🧪 Mode Simulasi (Development Only)
+                </p>
+                <p className="text-xs text-yellow-700 mb-4">
+                  Subscription ID: {simSubscriptionId}
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={handleSimulateSuccess}
+                    className="px-4 py-2 bg-green-500 text-white rounded-md text-sm hover:bg-green-600"
+                  >
+                    ✓ Pembayaran Sukses
+                  </button>
+                  <button
+                    onClick={handleSimulateFailure}
+                    className="px-4 py-2 bg-red-500 text-white rounded-md text-sm hover:bg-red-600"
+                  >
+                    ✗ Pembayaran Gagal
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
