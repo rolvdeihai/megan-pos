@@ -83,7 +83,7 @@ export async function simulatePaymentSuccess(
   if (!isSimulationMode()) {
     return {
       success: false,
-      error: 'Simulation mode disabled',
+      error: 'Mode simulasi tidak aktif',
     };
   }
 
@@ -113,7 +113,7 @@ export async function simulatePaymentFailure(
   if (!isSimulationMode()) {
     return {
       success: false,
-      error: 'Simulation mode disabled',
+      error: 'Mode simulasi tidak aktif',
     };
   }
 
