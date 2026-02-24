@@ -1,4 +1,6 @@
 // src/lib/xendit.ts
+import * as crypto from 'crypto';
+
 export interface XenditInvoiceRequest {
   external_id: string;
   amount: number;
@@ -90,11 +92,8 @@ export function verifyWebhookSignature(
   }
 
   if (!XENDIT_WEBHOOK_SECRET) {
-    console.warn('XENDIT_WEBHOOK_SECRET not set');
     return false;
   }
-
-  const crypto = require('crypto');
   const expected = crypto
     .createHmac('sha256', XENDIT_WEBHOOK_SECRET)
     .update(payload)
