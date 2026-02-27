@@ -22,6 +22,12 @@ Buat file `.env.local` di root:
 ```
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+
+# Optional (billing/checkout/payment)
+XENDIT_MODE=simulate
+XENDIT_API_KEY=xnd_development_dummy
+XENDIT_WEBHOOK_SECRET=whsec_dummy
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
 ```
 
 ### 3) Run dev server

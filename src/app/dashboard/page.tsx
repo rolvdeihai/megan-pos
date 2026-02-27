@@ -2,55 +2,37 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  CurrencyDollarIcon, 
-  ShoppingBagIcon, 
+import {
+  CurrencyDollarIcon,
+  ShoppingBagIcon,
   UsersIcon,
   ChartBarIcon
 } from '@heroicons/react/24/outline';
-import { useRouter } from 'next/navigation';
 import { PERMISSIONS, hasPermission } from '@/lib/permissions';
 import { getUserRoleLabel } from '@/lib/navigation';
-
-type User = {
-  id: string;
-  email: string;
-  full_name: string;
-  restaurant_name: string;
-  restaurant_slug?: string;
-  role?: string | null;
-  role_name?: string | null;
-  is_staff?: boolean;
-  user_type: 'owner' | 'staff';
-  permissions?: string[];
-};
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const { user, isLoading } = useAuth();
   const [stats, setStats] = useState({
     totalRevenue: 0,
     totalOrders: 0,
     activeTables: 0,
     todayRevenue: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch current user (owner or staff)
-    fetch('/api/auth/current')
-      .then(res => res.json())
-      .then(data => {
-        if (data.user) {
-          setUser(data.user);
-        } else {
-          // Tidak ada user, redirect ke login
-          router.push('/login');
-        }
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [router]);
+    if (user) {
+      // Fetch data sederhana
+      setStatsLoading(true);
+      fetch('/api/dashboard/stats')
+        .then(res => res.json())
+        .then(data => setStats(data))
+        .catch(console.error)
+        .finally(() => setStatsLoading(false));
+    }
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -70,7 +52,7 @@ export default function DashboardPage() {
     }).format(amount);
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto py-8 px-4">
         <div className="animate-pulse">

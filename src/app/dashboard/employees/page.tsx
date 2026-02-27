@@ -3,6 +3,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
 
@@ -31,7 +32,7 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null); // State untuk mode Edit
-  
+
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -41,6 +42,7 @@ export default function EmployeesPage() {
   });
 
   const { user, isLoading: authLoading } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     if (user?.id) {
@@ -120,9 +122,31 @@ export default function EmployeesPage() {
 
         alert('Data karyawan berhasil diperbarui');
       } else {
+        // --- ENFORCE STAFF LOCATION LIMITS ---
+        let tier = user.subscription_tier || 'basic';
+        if (tier === 'free') tier = 'basic';
+        let maxStaff = 1; // basic
+        if (tier === 'pro') maxStaff = 3;
+        if (tier === 'enterprise') maxStaff = 10;
+
+        // Query active staff
+        const { count, error: countError } = await supabase
+          .from('employees')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('is_active', true);
+
+        if (!countError && count !== null && count >= maxStaff) {
+          if (confirm(`Batas maksimum ${maxStaff} staff untuk paket ${tier.toUpperCase()} telah tercapai. Apakah Anda ingin meng-upgrade paket?`)) {
+            router.push('/dashboard/billing');
+          }
+          return;
+        }
+        // -------------------------------------
+
         // --- MODE TAMBAH BARU ---
         const employeeCode = `EMP${Date.now().toString().slice(-6)}`;
-        
+
         const { error } = await supabase.from('employees').insert({
           ...formData,
           employee_code: employeeCode,
@@ -310,18 +334,16 @@ export default function EmployeesPage() {
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    employee.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${employee.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
                     {employee.is_active ? 'Aktif' : 'Nonaktif'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                   <button
                     onClick={() => toggleEmployeeStatus(employee.id, employee.is_active)}
-                    className={`${
-                      employee.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'
-                    }`}
+                    className={`${employee.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'
+                      }`}
                   >
                     {employee.is_active ? 'Nonaktifkan' : 'Aktifkan'}
                   </button>
@@ -337,9 +359,9 @@ export default function EmployeesPage() {
           </tbody>
         </table>
         {employees.length === 0 && (
-           <div className="text-center py-8 text-gray-500">
-              Belum ada karyawan. Klik "+ Tambah Karyawan" untuk memulai.
-           </div>
+          <div className="text-center py-8 text-gray-500">
+            Belum ada karyawan. Klik "+ Tambah Karyawan" untuk memulai.
+          </div>
         )}
       </div>
     </div>

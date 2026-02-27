@@ -22,7 +22,7 @@ export async function validateSubscriptionChange(
     .select('*, packages(*)')
     .eq('user_id', userId)
     .eq('status', 'active')
-    .single();
+    .maybeSingle();
 
   if (currentSub?.package_id === packageId) {
     return {

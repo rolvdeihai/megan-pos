@@ -1,5 +1,9 @@
 'use client';
 
+// Payment Method Selector using Xendit SDK supported methods
+// Docs: https://docs.xendit.co/payment-channels
+// SDK Ref: src/lib/xendit.ts - PAYMENT_METHODS
+
 interface PaymentMethod {
   id: string;
   name: string;
@@ -8,6 +12,7 @@ interface PaymentMethod {
   description: string;
 }
 
+// Payment method IDs must match Xendit SDK payment channel codes
 const paymentMethods: PaymentMethod[] = [
   {
     id: 'BCA',

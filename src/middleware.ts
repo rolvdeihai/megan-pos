@@ -7,6 +7,16 @@ export function middleware(request: NextRequest) {
   const ownerToken = request.cookies.get('megan_pos_auth');
   const staffToken = request.cookies.get('megan_pos_staff');
   const { pathname } = request.nextUrl;
+  const ownerSession = parseJsonCookie<{ userId?: string }>(ownerToken?.value);
+  const hasValidOwnerSession = Boolean(ownerSession?.userId);
+  const hasInvalidOwnerCookie = Boolean(ownerToken?.value) && !hasValidOwnerSession;
+
+  const withCookieCleanup = (response: NextResponse) => {
+    if (hasInvalidOwnerCookie) {
+      response.cookies.delete('megan_pos_auth');
+    }
+    return response;
+  };
 
   // Public paths yang tidak perlu auth
   const publicPaths = [
@@ -38,21 +48,21 @@ export function middleware(request: NextRequest) {
   // Check dashboard routes (allow both owner and staff)
   if (pathname.startsWith('/dashboard')) {
     // Jika tidak ada token sama sekali
-    if (!ownerToken && !staffToken) {
+    if (!hasValidOwnerSession && !staffToken) {
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('redirect', pathname);
-      return NextResponse.redirect(loginUrl);
+      return withCookieCleanup(NextResponse.redirect(loginUrl));
     }
 
     // Owner always has full access
-    if (ownerToken) {
-      return NextResponse.next();
+    if (hasValidOwnerSession) {
+      return withCookieCleanup(NextResponse.next());
     }
 
     // Staff permission check
     const requiredPermission = getRequiredPermissionForPath(pathname);
     if (!requiredPermission) {
-      return NextResponse.next();
+      return withCookieCleanup(NextResponse.next());
     }
 
     try {
@@ -63,39 +73,39 @@ export function middleware(request: NextRequest) {
         : getLegacyRolePermissions(staffData?.role);
 
       if (hasPermission(staffPermissions, requiredPermission)) {
-        return NextResponse.next();
+        return withCookieCleanup(NextResponse.next());
       }
     } catch (error) {
       console.error('[Middleware] Failed to parse staff token:', error);
     }
 
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return withCookieCleanup(NextResponse.redirect(new URL('/dashboard', request.url)));
   }
 
   // Check owner-only routes (non-dashboard)
   const isOwnerOnlyRoute = ownerOnlyRoutes.some((route) => pathname.startsWith(route));
 
   if (isOwnerOnlyRoute) {
-    if (!ownerToken) {
+    if (!hasValidOwnerSession) {
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('redirect', pathname);
-      return NextResponse.redirect(loginUrl);
+      return withCookieCleanup(NextResponse.redirect(loginUrl));
     }
   }
 
   // Untuk rute lain yang dilindungi (selain dashboard) hanya untuk owner
-  if (!ownerToken && !isPublicPath) {
+  if (!hasValidOwnerSession && !isPublicPath) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(loginUrl);
+    return withCookieCleanup(NextResponse.redirect(loginUrl));
   }
 
   // Jika sudah login sebagai owner tapi akses login/register page
-  if (ownerToken && (pathname === '/login' || pathname === '/register')) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+  if (hasValidOwnerSession && (pathname === '/login' || pathname === '/register')) {
+    return withCookieCleanup(NextResponse.redirect(new URL('/dashboard', request.url)));
   }
 
-  return NextResponse.next();
+  return withCookieCleanup(NextResponse.next());
 }
 
 // Matcher harus eksplisit
