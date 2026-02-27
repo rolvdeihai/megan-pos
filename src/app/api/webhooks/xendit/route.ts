@@ -1,11 +1,14 @@
 // src/app/api/webhooks/xendit/route.ts
+// Xendit webhook handler using official SDK types
+// Docs: https://developers.xendit.co/api-reference/#invoice-callback
+
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyWebhookSignature, isSimulationMode } from '@/lib/xendit';
+import { verifyWebhookSignature, isSimulationMode, parseWebhookPayload } from '@/lib/xendit';
+import type { InvoiceCallback } from '@/lib/xendit';
 import {
   activateSubscription,
   expirePendingSubscription,
 } from '@/lib/subscription';
-import type { XenditWebhookPayload } from '@/lib/xendit';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -18,36 +21,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
-    const data: XenditWebhookPayload = JSON.parse(payload);
+    // Parse payload using SDK-compatible types
+    const data: InvoiceCallback = parseWebhookPayload(payload);
 
     console.log('Xendit webhook received:', {
-      external_id: data.external_id,
+      external_id: data.externalId,
       status: data.status,
-      payment_method: data.payment_method,
+      payment_method: data.paymentMethod,
+      payment_channel: data.paymentChannel,
     });
 
     // Handle based on status
+    // Docs: https://developers.xendit.co/api-reference/#invoice-status
     switch (data.status) {
       case 'PAID': {
-        await activateSubscription(data.external_id, {
+        await activateSubscription(data.externalId, {
           xendit_invoice_id: data.id,
-          payment_method: data.payment_method,
-          paid_at: data.paid_at,
+          payment_method: data.paymentMethod || data.paymentChannel || 'UNKNOWN',
+          paid_at: data.paidAt,
         });
-        console.log('Subscription activated:', data.external_id);
+        console.log('Subscription activated:', data.externalId);
         break;
       }
 
       case 'EXPIRED': {
-        await expirePendingSubscription(data.external_id);
-        console.log('Subscription expired:', data.external_id);
+        await expirePendingSubscription(data.externalId);
+        console.log('Subscription expired:', data.externalId);
         break;
       }
 
       case 'PENDING':
       default: {
         // No action needed for pending
-        console.log('Payment pending:', data.external_id);
+        console.log('Payment pending:', data.externalId);
         break;
       }
     }

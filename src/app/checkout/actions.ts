@@ -1,6 +1,10 @@
 'use server';
 
+// Xendit SDK Checkout Actions
+// Uses official xendit-node SDK for standardized payment processing
+
 import { createXenditInvoice, isSimulationMode } from '@/lib/xendit';
+import type { Invoice } from '@/lib/xendit';
 import {
   validateSubscriptionChange,
   createPendingSubscription,
@@ -59,15 +63,18 @@ export async function initiateCheckout(params: CheckoutParams): Promise<Checkout
       };
     }
 
-    // Create Xendit invoice with specific payment method
-    const invoice = await createXenditInvoice({
+    // Create Xendit invoice with SDK
+    // Docs: https://developers.xendit.co/api-reference/#create-invoice
+    const invoice: Invoice = await createXenditInvoice({
       external_id: subscription.id,
       amount: validation.targetPackage.price,
       description: `Berlangganan ${validation.targetPackage.name} - Megan POS`,
       payment_methods: [paymentMethod],
-      success_redirect_url: `${BASE_URL}/payment/success?subscription_id=${subscription.id}`,
-      failure_redirect_url: `${BASE_URL}/payment/failed?subscription_id=${subscription.id}`,
+      success_redirect_url: `${BASE_URL}/dashboard/billing?status=success&order_id=${subscription.id}`,
+      failure_redirect_url: `${BASE_URL}/dashboard/billing?status=failed&order_id=${subscription.id}`,
       callback_url: `${BASE_URL}/api/webhooks/xendit`,
+      currency: 'IDR',
+      invoice_duration: 86400, // 24 hours
       customer: {
         given_names: userName,
         email: userEmail,
@@ -78,7 +85,7 @@ export async function initiateCheckout(params: CheckoutParams): Promise<Checkout
       success: true,
       invoiceId: invoice.id,
       subscriptionId: subscription.id,
-      invoiceUrl: invoice.invoice_url,
+      invoiceUrl: invoice.invoiceUrl,
     };
   } catch (error) {
     console.error('Checkout error:', error);

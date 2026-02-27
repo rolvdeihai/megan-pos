@@ -92,7 +92,7 @@ export default function BillingPage() {
       .select('*, packages(id, name, price, features)')
       .eq('user_id', user.id)
       .eq('status', 'active')
-      .single();
+      .maybeSingle();
 
     if (!error && data) {
       setCurrentSubscription(data);

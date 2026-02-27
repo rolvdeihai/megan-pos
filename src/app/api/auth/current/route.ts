@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
 
     // Cek owner cookie terlebih dahulu
     const ownerCookie = cookieStore.get('megan_pos_auth');
+
     if (ownerCookie?.value) {
       const authData = parseJsonCookie<{ userId?: string }>(ownerCookie.value);
       const userId = authData?.userId;
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
 
       const { data: userData, error } = await supabase
         .from('users')
-        .select('id, email, full_name, restaurant_name, restaurant_slug')
+        .select('id, email, full_name, restaurant_name, restaurant_slug, subscription_tier')
         .eq('id', userId)
         .single();
 
@@ -60,10 +61,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ user: null });
       }
 
-      // Ambil data restaurant dari owner
+      // Ambil data restaurant dan subscription dari owner
       const { data: userData } = await supabase
         .from('users')
-        .select('restaurant_slug, restaurant_name')
+        .select('restaurant_slug, restaurant_name, subscription_tier')
         .eq('id', originalUserId)
         .single();
 
@@ -84,6 +85,7 @@ export async function GET(request: NextRequest) {
           role_name: roleName,
           restaurant_slug: userData?.restaurant_slug || '',
           restaurant_name: userData?.restaurant_name || '',
+          subscription_tier: userData?.subscription_tier || 'basic',
           user_id: employeeData.user_id,
           is_staff: true,
           user_type: 'staff',

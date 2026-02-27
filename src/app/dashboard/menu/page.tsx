@@ -138,8 +138,11 @@ export default function MenuPage() {
     e.preventDefault();
     if (!user) return;
 
+    const sku = itemForm.sku || `SKU-${Date.now().toString().slice(-6)}`;
+
     const itemData = {
       ...itemForm,
+      sku,
       user_id: ownerId,
       price: parseFloat(itemForm.price) || 0,
       cost_price: parseFloat(itemForm.cost_price) || 0,

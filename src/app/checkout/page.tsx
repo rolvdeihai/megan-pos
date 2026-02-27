@@ -80,14 +80,30 @@ function CheckoutContent() {
       }
 
       if (result.simulation) {
-        // Simulation mode - show success directly
-        toast.success('Mode simulasi: Pembayaran berhasil!');
-        router.push('/dashboard/billing?status=success');
+        if (!result.invoiceId || !result.subscriptionId) {
+          toast.error('Data pembayaran simulasi tidak lengkap. Silakan coba lagi.');
+          return;
+        }
+
+        toast('Mode simulasi aktif. Lanjutkan di halaman pending payment.', { icon: '🧪' });
+
+        const pendingParams = new URLSearchParams({
+          invoice_id: result.invoiceId,
+          subscription_id: result.subscriptionId,
+          method: selectedMethod,
+          simulation: '1',
+        });
+
+        router.push(`/payment/pending?${pendingParams.toString()}`);
         return;
       }
 
-      // Redirect to payment pending page with invoice details
-      router.push(`/payment/pending?invoice_id=${result.invoiceId}&subscription_id=${result.subscriptionId}&method=${selectedMethod}`);
+      if (!result.invoiceUrl) {
+        toast.error('Link pembayaran tidak tersedia. Silakan coba lagi.');
+        return;
+      }
+
+      window.location.href = result.invoiceUrl;
     } catch (error) {
       console.error('Checkout error:', error);
       toast.error('Terjadi kesalahan. Silakan coba lagi.');

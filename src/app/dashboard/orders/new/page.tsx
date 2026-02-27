@@ -13,8 +13,9 @@ export default function NewOrderPage() {
   const router = useRouter();
   const [tables, setTables] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Gunakan useAuth yang sudah ada
   const { user } = useAuth();
   const ownerId = getOwnerId(user);
@@ -27,12 +28,13 @@ export default function NewOrderPage() {
 
   const fetchData = async () => {
     if (!ownerId) return;
-    
+
     // Fetch tables
     const { data: tablesData } = await supabase
       .from('restaurant_tables')
       .select('*')
       .eq('user_id', ownerId)
+      .eq('is_available', true)
       .order('table_number');
 
     setTables(tablesData || []);
@@ -46,26 +48,61 @@ export default function NewOrderPage() {
       .order('name');
 
     setMenuItems(menuData || []);
+
+    // Fetch menu categories
+    const { data: catData } = await supabase
+      .from('menu_categories')
+      .select('*')
+      .eq('user_id', ownerId)
+      .eq('is_active', true)
+      .order('display_order');
+
+    setCategories(catData || []);
     setLoading(false);
   };
 
   const handleCreateOrder = async (orderData: any) => {
-    if (!ownerId) return;
-    
+    if (!ownerId || !user) return;
+
+    // --- ENFORCE TRANSACTION LIMIT ---
+    let tier = user.subscription_tier || 'basic';
+    if (tier === 'free') tier = 'basic';
+    if (tier === 'basic') {
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { count, error: countError } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', ownerId)
+        .gte('created_at', startOfMonth.toISOString());
+
+      if (!countError && count !== null && count >= 100) {
+        if (confirm('Batas maksimum 100 transaksi/bulan untuk paket Basic telah tercapai. Apakah Anda ingin meng-upgrade paket?')) {
+          router.push('/dashboard/billing');
+        }
+        return;
+      }
+    }
+    // ---------------------------------
+
+    const { items, ...orderFields } = orderData;
+
     // Generate order number
     const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
-    
-    const subtotal = orderData.items.reduce((sum: number, item: any) => 
+
+    const subtotal = items.reduce((sum: number, item: any) =>
       sum + (item.price * item.quantity), 0);
-    
+
     const taxPercentage = 10; // Default tax
     const taxAmount = subtotal * (taxPercentage / 100);
     const totalAmount = subtotal + taxAmount;
-    
+
     const { data, error } = await supabase
       .from('orders')
       .insert({
-        ...orderData,
+        ...orderFields,
         order_number: orderNumber,
         user_id: ownerId,
         status: 'pending',
@@ -82,7 +119,7 @@ export default function NewOrderPage() {
 
     if (!error && data) {
       // Insert order items
-      const orderItems = orderData.items.map((item: any) => ({
+      const orderItems = items.map((item: any) => ({
         order_id: data.id,
         menu_item_id: item.id,
         quantity: item.quantity,
@@ -94,16 +131,17 @@ export default function NewOrderPage() {
       await supabase.from('order_items').insert(orderItems);
 
       // Update table availability if dine-in
-      if (orderData.order_type === 'dine_in' && orderData.table_id) {
+      if (orderFields.order_type === 'dine_in' && orderFields.table_id) {
         await supabase
           .from('restaurant_tables')
           .update({ is_available: false })
-          .eq('id', orderData.table_id);
+          .eq('id', orderFields.table_id);
       }
 
       router.push('/dashboard/orders');
     } else {
       console.error('Error creating order:', error);
+      alert('Gagal membuat order: ' + (error?.message || 'Unknown error'));
     }
   };
 
@@ -128,6 +166,7 @@ export default function NewOrderPage() {
       <OrderModal
         tables={tables}
         menuItems={menuItems}
+        categories={categories}
         onSubmit={handleCreateOrder}
         onClose={() => router.push('/dashboard/orders')}
       />
