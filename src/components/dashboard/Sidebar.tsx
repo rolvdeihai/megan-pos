@@ -71,7 +71,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       .select('*')
       .eq('user_id', ownerId)
       .eq('status', 'active')
-      .single();
+      .maybeSingle();
 
     setSubscription(subscriptionData);
   };

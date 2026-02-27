@@ -27,7 +27,7 @@ interface OrderDetails {
   discount_percentage: number;
   discount_amount: number;
   total_amount: number;
-  payment_method: string;
+  payment_method?: string | null;
   payment_status: string;
   notes: string;
   created_at: string;
@@ -151,7 +151,6 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
       const { error } = await supabase
         .from('orders')
         .update({
-          payment_method: paymentMethod,
           payment_status: 'paid',
           status: 'completed',
           completed_at: new Date().toISOString(),
@@ -161,7 +160,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
       if (error) throw error;
 
       // Create transaction record
-      await supabase.from('transactions').insert({
+      const { error: transactionError } = await supabase.from('transactions').insert({
         user_id: orderDetails?.user_id,
         order_id: order.id,
         transaction_number: `TRX-${Date.now().toString().slice(-6)}`,
@@ -171,6 +170,16 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
         status: 'completed',
         notes: `Pembayaran untuk order ${orderDetails?.order_number}`,
       });
+
+      if (transactionError) throw transactionError;
+
+      // Free the table if it's a dine_in order with a table
+      if (orderDetails?.table_id) {
+        await supabase
+          .from('restaurant_tables')
+          .update({ is_available: true })
+          .eq('id', orderDetails.table_id);
+      }
 
       alert('Pembayaran berhasil!');
       onComplete();
@@ -369,7 +378,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
           {orderDetails.payment_status !== 'paid' && (
             <div className="mt-8 border-t pt-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Pembayaran</h3>
-              
+
               <div className="space-y-6">
                 {/* Payment Method */}
                 <div>
