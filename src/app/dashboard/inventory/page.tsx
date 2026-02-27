@@ -45,9 +45,9 @@ export default function InventoryPage() {
 
   const fetchInventory = async () => {
     if (!user?.id) return;
-    
+
     setLoading(true);
-    
+
     const { data, error } = await supabase
       .from('inventory')
       .select('*')
@@ -62,12 +62,12 @@ export default function InventoryPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!user?.id) return;
-    
+
     // Generate SKU if empty
     const sku = formData.sku || `INV-${Date.now().toString().slice(-6)}`;
-    
+
     const { error } = await supabase.from('inventory').insert({
       ...formData,
       sku,
@@ -99,7 +99,7 @@ export default function InventoryPage() {
     if (!item) return;
 
     const newStock = Math.max(0, item.current_stock + adjustment);
-    
+
     const { error } = await supabase
       .from('inventory')
       .update({
@@ -139,6 +139,29 @@ export default function InventoryPage() {
       </div>
     );
   }
+
+  // --- ENFORCE INVENTORY TIER LIMIT ---
+  let tier = user.subscription_tier || 'basic';
+  if (tier === 'free') tier = 'basic';
+  if (tier === 'basic') {
+    return (
+      <div className="max-w-7xl mx-auto py-16 px-4">
+        <div className="text-center bg-white p-8 rounded-xl shadow-sm border border-orange-200">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Fitur Terkunci 🔒</h2>
+          <p className="text-gray-600 mb-8 max-w-md mx-auto">
+            Fitur Manajemen Inventory hanya tersedia untuk pelanggan paket <strong>Pro</strong> dan <strong>Enterprise</strong>. Upgrade sekarang untuk mengontrol stok bahan baku restoran Anda.
+          </p>
+          <a
+            href="/dashboard/billing"
+            className="inline-block px-6 py-3 bg-secondary text-white rounded-lg hover:bg-secondary/90 font-medium transition-colors"
+          >
+            Upgrade ke Paket Pro
+          </a>
+        </div>
+      </div>
+    );
+  }
+  // ------------------------------------
 
   const lowStockItems = items.filter(item => item.current_stock <= item.minimum_stock);
 

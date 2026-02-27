@@ -16,6 +16,7 @@ interface User {
   user_type?: 'owner' | 'staff';
   permissions?: string[];
   user_id?: string;
+  subscription_tier?: string | null;
 }
 
 interface AuthContextType {
@@ -32,19 +33,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchUser = async () => {
+  const fetchUser = async (retryCount = 0) => {
     try {
-      const res = await fetch('/api/auth/current');
+      const res = await fetch('/api/auth/current', {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
         return data.user;
       } else {
+        // If we get a 401/403, clear the user
         setUser(null);
         return null;
       }
     } catch (error) {
       console.error('Auth error:', error);
+      // Retry up to 2 times on network errors
+      if (retryCount < 2) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return fetchUser(retryCount + 1);
+      }
       setUser(null);
       return null;
     } finally {
