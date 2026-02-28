@@ -45,9 +45,9 @@ export default function InventoryPage() {
 
   const fetchInventory = async () => {
     if (!user?.id) return;
-    
+
     setLoading(true);
-    
+
     const { data, error } = await supabase
       .from('inventory')
       .select('*')
@@ -62,12 +62,12 @@ export default function InventoryPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!user?.id) return;
-    
+
     // Generate SKU if empty
     const sku = formData.sku || `INV-${Date.now().toString().slice(-6)}`;
-    
+
     const { error } = await supabase.from('inventory').insert({
       ...formData,
       sku,
@@ -99,7 +99,7 @@ export default function InventoryPage() {
     if (!item) return;
 
     const newStock = Math.max(0, item.current_stock + adjustment);
-    
+
     const { error } = await supabase
       .from('inventory')
       .update({
@@ -121,7 +121,7 @@ export default function InventoryPage() {
     return (
       <div className="max-w-7xl mx-auto py-8">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Memuat data inventory...</p>
         </div>
       </div>
@@ -140,6 +140,29 @@ export default function InventoryPage() {
     );
   }
 
+  // --- ENFORCE INVENTORY TIER LIMIT ---
+  let tier = user.subscription_tier || 'basic';
+  if (tier === 'free') tier = 'basic';
+  if (tier === 'basic') {
+    return (
+      <div className="max-w-7xl mx-auto py-16 px-4">
+        <div className="text-center bg-white p-8 rounded-xl shadow-sm border border-orange-200">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Fitur Terkunci 🔒</h2>
+          <p className="text-gray-600 mb-8 max-w-md mx-auto">
+            Fitur Manajemen Inventory hanya tersedia untuk pelanggan paket <strong>Pro</strong> dan <strong>Enterprise</strong>. Upgrade sekarang untuk mengontrol stok bahan baku restoran Anda.
+          </p>
+          <a
+            href="/dashboard/billing"
+            className="inline-block px-6 py-3 bg-secondary text-white rounded-lg hover:bg-secondary/90 font-medium transition-colors"
+          >
+            Upgrade ke Paket Pro
+          </a>
+        </div>
+      </div>
+    );
+  }
+  // ------------------------------------
+
   const lowStockItems = items.filter(item => item.current_stock <= item.minimum_stock);
 
   return (
@@ -155,7 +178,7 @@ export default function InventoryPage() {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
         >
           + Tambah Item
         </button>
@@ -176,7 +199,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, sku: e.target.value })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -190,7 +213,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -203,7 +226,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, category: e.target.value })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -215,7 +238,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, unit: e.target.value })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 >
                   <option value="pcs">Pieces</option>
                   <option value="kg">Kilogram</option>
@@ -234,7 +257,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, current_stock: parseFloat(e.target.value) })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -247,7 +270,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, minimum_stock: parseFloat(e.target.value) })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -260,7 +283,7 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, cost_per_unit: parseFloat(e.target.value) })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -273,14 +296,14 @@ export default function InventoryPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, supplier: e.target.value })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
             </div>
             <div className="flex space-x-3">
               <button
                 type="submit"
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                className="px-4 py-2 bg-secondary text-white rounded-md hover:bg-secondary/90"
               >
                 Simpan
               </button>
@@ -376,7 +399,7 @@ export default function InventoryPage() {
                     </button>
                     <button
                       onClick={() => updateStock(item.id, 10)}
-                      className="text-blue-600 hover:text-blue-900"
+                      className="text-primary hover:text-primary"
                     >
                       +10
                     </button>

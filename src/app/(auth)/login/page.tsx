@@ -20,11 +20,9 @@ export default function LoginPage() {
 
     try {
       const success = await login(email, password);
-      
+
       if (success) {
-        // Redirect langsung setelah login berhasil
-        router.replace('/dashboard');
-        router.refresh();
+        window.location.href = '/dashboard';
       } else {
         setError('Email atau password salah');
       }

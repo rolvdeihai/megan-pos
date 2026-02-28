@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { PlusIcon, PencilIcon, TrashIcon, QrCodeIcon } from '@heroicons/react/24/outline';
 import QRCode from 'react-qr-code';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { getOwnerId } from '@/lib/user-scope';
 
 type Table = {
   id: string;
@@ -28,20 +29,21 @@ export default function TablesPage() {
   });
 
   const { user } = useAuth();
+  const ownerId = getOwnerId(user);
 
   useEffect(() => {
-    if (user?.id) {
+    if (ownerId) {
       fetchTables();
     }
-  }, [user]);
+  }, [ownerId]);
 
   const fetchTables = async () => {
-    if (!user?.id) return;
+    if (!ownerId) return;
     
     const { data, error } = await supabase
       .from('restaurant_tables')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', ownerId)
       .order('table_number');
 
     if (!error) {
@@ -55,7 +57,7 @@ export default function TablesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!user?.id) return;
+    if (!ownerId) return;
     
     try {
       if (editingTable) {
@@ -69,14 +71,14 @@ export default function TablesPage() {
             updated_at: new Date().toISOString(),
           })
           .eq('id', editingTable.id)
-          .eq('user_id', user.id);
+          .eq('user_id', ownerId);
 
         if (error) throw error;
       } else {
         // Create new table
         const { error } = await supabase.from('restaurant_tables').insert({
           ...formData,
-          user_id: user.id,
+          user_id: ownerId,
           is_available: true,
         });
 
@@ -112,14 +114,14 @@ export default function TablesPage() {
   };
 
   const deleteTable = async (id: string) => {
-    if (!user?.id) return;
+    if (!ownerId) return;
     
     if (confirm('Apakah Anda yakin ingin menghapus meja ini?')) {
       const { error } = await supabase
         .from('restaurant_tables')
         .delete()
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (!error) {
         fetchTables();
@@ -131,14 +133,14 @@ export default function TablesPage() {
   };
 
   const toggleAvailability = async (table: Table) => {
-    if (!user?.id) return;
+    if (!ownerId) return;
     
     try {
       await supabase
         .from('restaurant_tables')
         .update({ is_available: !table.is_available })
         .eq('id', table.id)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       fetchTables();
     } catch (error) {
@@ -161,7 +163,7 @@ export default function TablesPage() {
         .from('restaurant_tables')
         .update({ qr_code: qrUrl })
         .eq('id', tableId)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       fetchTables();
       setShowQR(qrUrl);
@@ -245,7 +247,7 @@ export default function TablesPage() {
             setEditingTable(null);
             setShowForm(true);
           }}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 flex items-center"
         >
           <PlusIcon className="w-5 h-5 mr-2" />
           Tambah Meja
@@ -270,7 +272,7 @@ export default function TablesPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, table_number: e.target.value })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                   placeholder="1, 2, A1, B2"
                 />
               </div>
@@ -284,7 +286,7 @@ export default function TablesPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, table_name: e.target.value })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                   placeholder="Meja Keluarga, Meja VIP"
                 />
               </div>
@@ -300,14 +302,14 @@ export default function TablesPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, capacity: parseInt(e.target.value) || 4 })
                   }
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                 />
               </div>
             </div>
             <div className="flex space-x-3 pt-4">
               <button
                 type="submit"
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                className="px-6 py-2 bg-secondary text-white rounded-lg hover:bg-secondary/90"
               >
                 {editingTable ? 'Update Meja' : 'Simpan Meja'}
               </button>
@@ -330,7 +332,7 @@ export default function TablesPage() {
           <p className="text-gray-600 mb-6">Mulai dengan menambahkan meja pertama Anda</p>
           <button
             onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
           >
             + Tambah Meja Pertama
           </button>
@@ -381,7 +383,7 @@ export default function TablesPage() {
                 <div className="flex space-x-2">
                   <button
                     onClick={() => generateQRCode(table.id, table.table_number)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                    className="p-2 text-primary hover:bg-primary/10 rounded-lg"
                     title="Generate QR Code"
                   >
                     <QrCodeIcon className="w-5 h-5" />
@@ -398,7 +400,7 @@ export default function TablesPage() {
                   {table.qr_code && (
                     <button
                       onClick={() => setShowQR(table.qr_code)}
-                      className="px-3 py-1 text-xs bg-blue-100 text-blue-800 hover:bg-blue-200 rounded-full"
+                      className="px-3 py-1 text-xs bg-primary/10 text-primary hover:bg-primary/20 rounded-full"
                     >
                       Lihat QR
                     </button>
@@ -453,7 +455,7 @@ export default function TablesPage() {
               <div className="flex space-x-4 mt-6">
                 <button
                   onClick={downloadQRCode}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
                 >
                   Download QR
                 </button>

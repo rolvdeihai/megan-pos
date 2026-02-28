@@ -1,6 +1,7 @@
 // src/app/api/auth/me/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { parseJsonCookie } from '@/lib/cookie-utils';
 import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
@@ -13,8 +14,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ user: null });
     }
 
-    const authData = JSON.parse(authCookie.value);
-    const userId = authData.userId;
+    const authData = parseJsonCookie<{ userId?: string }>(authCookie.value);
+    const userId = authData?.userId;
+
+    if (!userId) {
+      return NextResponse.json({ user: null });
+    }
 
     const { data: userData, error } = await supabase
       .from('users')
