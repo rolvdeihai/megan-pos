@@ -328,7 +328,7 @@ export default function TransactionsPage() {
     return (
       <div className="max-w-7xl mx-auto py-8">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Memuat data transaksi...</p>
         </div>
       </div>
@@ -455,7 +455,7 @@ export default function TransactionsPage() {
             </div>
             <button
               onClick={exportToCSV}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 flex items-center"
             >
               <ArrowDownTrayIcon className="w-5 h-5 mr-2" />
               Export CSV
@@ -472,7 +472,7 @@ export default function TransactionsPage() {
               <DatePicker
                 selected={startDate}
                 onChange={setStartDate}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                 dateFormat="dd/MM/yyyy"
               />
               <CalendarIcon className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
@@ -487,7 +487,7 @@ export default function TransactionsPage() {
               <DatePicker
                 selected={endDate}
                 onChange={setEndDate}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                 dateFormat="dd/MM/yyyy"
               />
               <CalendarIcon className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
@@ -501,7 +501,7 @@ export default function TransactionsPage() {
             <select
               value={transactionType}
               onChange={(e) => setTransactionType(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
             >
               <option value="all">Semua Tipe</option>
               <option value="sale">Penjualan</option>
@@ -517,7 +517,7 @@ export default function TransactionsPage() {
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
             >
               <option value="all">Semua Metode</option>
               <option value="cash">Cash</option>
@@ -630,7 +630,7 @@ export default function TransactionsPage() {
                         // View transaction details
                         alert(`Detail Transaksi: ${transaction.transaction_number}\nTipe: ${transaction.type}\nJumlah: Rp ${transaction.amount.toLocaleString()}\nCatatan: ${transaction.notes || 'Tidak ada catatan'}`);
                       }}
-                      className="text-blue-600 hover:text-blue-900 flex items-center"
+                      className="text-primary hover:text-primary flex items-center"
                     >
                       <EyeIcon className="w-4 h-4 mr-1" />
                       Lihat
@@ -706,7 +706,7 @@ export default function TransactionsPage() {
                   type="number"
                   value={formData.amount}
                   onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                   placeholder="Masukkan jumlah"
                   min="1"
                   required
@@ -721,7 +721,7 @@ export default function TransactionsPage() {
                 <select
                   value={formData.payment_method}
                   onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                 >
                   <option value="cash">Cash</option>
                   <option value="card">Card</option>
@@ -739,7 +739,7 @@ export default function TransactionsPage() {
                   <select
                     value={formData.order_id}
                     onChange={(e) => setFormData({ ...formData, order_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                     required
                   >
                     <option value="">Pilih order...</option>
@@ -764,7 +764,7 @@ export default function TransactionsPage() {
                   <select
                     value={formData.expense_category}
                     onChange={(e) => setFormData({ ...formData, expense_category: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                   >
                     <option value="operational">Operasional</option>
                     <option value="ingredients">Bahan Baku</option>
@@ -788,7 +788,7 @@ export default function TransactionsPage() {
                     type="text"
                     value={formData.refund_reason}
                     onChange={(e) => setFormData({ ...formData, refund_reason: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                     placeholder="Contoh: Pesanan salah, Pelanggan tidak puas, dll."
                   />
                 </div>
@@ -802,7 +802,7 @@ export default function TransactionsPage() {
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                   rows={3}
                   placeholder={modalType === 'expense' 
                     ? 'Contoh: Beli bahan baku bulanan, Bayar listrik Januari, dll.'
@@ -823,7 +823,7 @@ export default function TransactionsPage() {
               <button
                 onClick={handleSubmitExpenseRefund}
                 disabled={modalLoading}
-                className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center"
+                className="px-8 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium disabled:opacity-50 flex items-center"
               >
                 {modalLoading ? (
                   <>

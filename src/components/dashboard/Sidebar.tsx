@@ -18,6 +18,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider'; // Import useAuth
+import { useStaff } from '@/contexts/StaffContext';
+import { getVisibleDashboardNavItems } from '@/lib/navigation';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -29,29 +31,36 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const router = useRouter();
   
   // Gunakan useAuth hook
-  const { user } = useAuth();
+  const { user, logout: ownerLogout } = useAuth();
+  const { staff, logout: staffLogout } = useStaff();
+  const currentUser = user || staff;
+  const isStaff = currentUser?.user_type === 'staff' || !!staff;
+  const permissions = (currentUser as { permissions?: string[] })?.permissions ?? (isStaff ? [] : ['*']);
 
   const [restaurant, setRestaurant] = useState<any>(null);
   const [subscription, setSubscription] = useState<any>(null);
 
   useEffect(() => {
-    if (user?.id) {
+    if (currentUser?.id) {
       fetchUserData();
     } else {
       // Reset state jika user logout
       setRestaurant(null);
       setSubscription(null);
     }
-  }, [user]);
+  }, [currentUser]);
 
   const fetchUserData = async () => {
-    if (!user) return;
+    if (!currentUser) return;
+    const ownerId = currentUser.user_type === 'staff'
+      ? (currentUser as { user_id?: string }).user_id
+      : currentUser.id;
 
     // Fetch restaurant data
     const { data: restaurantData } = await supabase
       .from('users')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', ownerId)
       .single();
 
     setRestaurant(restaurantData);
@@ -60,28 +69,35 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     const { data: subscriptionData } = await supabase
       .from('user_subscriptions')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', ownerId)
       .eq('status', 'active')
-      .single();
+      .maybeSingle();
 
     setSubscription(subscriptionData);
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    if (isStaff) {
+      await staffLogout();
+    } else {
+      await ownerLogout();
+    }
     router.push('/login');
   };
 
-  const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-    { name: 'Menu', href: '/dashboard/menu', icon: RectangleStackIcon },
-    { name: 'Orders', href: '/dashboard/orders', icon: ShoppingBagIcon },
-    { name: 'Transactions', href: '/dashboard/transactions', icon: ChartBarIcon },
-    { name: 'Inventory', href: '/dashboard/inventory', icon: BuildingStorefrontIcon },
-    { name: 'Employees', href: '/dashboard/employees', icon: UserGroupIcon },
-    { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon },
-    { name: 'Billing', href: '/dashboard/billing', icon: CreditCardIcon },
-  ];
+  const iconMap: Record<string, typeof HomeIcon> = {
+    '/dashboard': HomeIcon,
+    '/dashboard/menu': RectangleStackIcon,
+    '/dashboard/orders': ShoppingBagIcon,
+    '/dashboard/transactions': ChartBarIcon,
+    '/dashboard/inventory': BuildingStorefrontIcon,
+    '/dashboard/employees': UserGroupIcon,
+    '/dashboard/settings': Cog6ToothIcon,
+    '/dashboard/billing': CreditCardIcon,
+    '/dashboard/tables': QueueListIcon,
+  };
+
+  const navigation = getVisibleDashboardNavItems(permissions);
 
   return (
     <>
@@ -103,7 +119,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-4 border-b">
           <div className="flex items-center">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center mr-3">
               <span className="text-white font-bold">M</span>
             </div>
             <div>
@@ -124,14 +140,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* User info */}
         <div className="p-4 border-b">
           <div className="flex items-center">
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-              <span className="text-blue-600 font-semibold">
-                {user?.email?.charAt(0).toUpperCase() || 'U'}
+            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center mr-3">
+              <span className="text-primary font-semibold">
+                {currentUser?.email?.charAt(0).toUpperCase() || 'U'}
               </span>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">
-                {user?.email || 'Loading...'}
+                {currentUser?.email || 'Loading...'}
               </p>
               <div className="flex items-center">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${
@@ -143,7 +159,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   href={`/${restaurant?.restaurant_slug}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="ml-2 text-xs text-blue-600 hover:text-blue-800"
+                  className="ml-2 text-xs text-primary hover:text-primary"
                 >
                   Lihat Website
                 </a>
@@ -156,9 +172,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
           {navigation.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const ItemIcon = iconMap[item.href] || HomeIcon;
             return (
               <Link
-                key={item.name}
+                key={item.href}
                 href={item.href}
                 onClick={() => {
                   if (window.innerWidth < 1024) {
@@ -169,15 +186,15 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   flex items-center px-3 py-2 text-sm font-medium rounded-lg
                   transition-colors duration-150 ease-in-out
                   ${isActive
-                    ? 'bg-blue-50 text-blue-700'
+                    ? 'bg-primary/10 text-primary'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                   }
                 `}
               >
-                <item.icon className={`w-5 h-5 mr-3 ${
-                  isActive ? 'text-blue-600' : 'text-gray-400'
+                <ItemIcon className={`w-5 h-5 mr-3 ${
+                  isActive ? 'text-primary' : 'text-gray-400'
                 }`} />
-                {item.name}
+                {item.label}
               </Link>
             );
           })}

@@ -3,6 +3,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
 
@@ -31,7 +32,7 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null); // State untuk mode Edit
-  
+
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -41,6 +42,7 @@ export default function EmployeesPage() {
   });
 
   const { user, isLoading: authLoading } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     if (user?.id) {
@@ -120,9 +122,31 @@ export default function EmployeesPage() {
 
         alert('Data karyawan berhasil diperbarui');
       } else {
+        // --- ENFORCE STAFF LOCATION LIMITS ---
+        let tier = user.subscription_tier || 'basic';
+        if (tier === 'free') tier = 'basic';
+        let maxStaff = 1; // basic
+        if (tier === 'pro') maxStaff = 3;
+        if (tier === 'enterprise') maxStaff = 10;
+
+        // Query active staff
+        const { count, error: countError } = await supabase
+          .from('employees')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('is_active', true);
+
+        if (!countError && count !== null && count >= maxStaff) {
+          if (confirm(`Batas maksimum ${maxStaff} staff untuk paket ${tier.toUpperCase()} telah tercapai. Apakah Anda ingin meng-upgrade paket?`)) {
+            router.push('/dashboard/billing');
+          }
+          return;
+        }
+        // -------------------------------------
+
         // --- MODE TAMBAH BARU ---
         const employeeCode = `EMP${Date.now().toString().slice(-6)}`;
-        
+
         const { error } = await supabase.from('employees').insert({
           ...formData,
           employee_code: employeeCode,
@@ -166,7 +190,7 @@ export default function EmployeesPage() {
     return (
       <div className="max-w-7xl mx-auto py-8">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Memuat data karyawan...</p>
         </div>
       </div>
@@ -190,14 +214,14 @@ export default function EmployeesPage() {
         <h1 className="text-2xl font-bold text-gray-900">Manajemen Karyawan</h1>
         <button
           onClick={handleAddNew}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
         >
           + Tambah Karyawan
         </button>
       </div>
 
       {showForm && (
-        <div className="mb-8 p-6 bg-white rounded-lg shadow border-l-4 border-blue-500">
+        <div className="mb-8 p-6 bg-white rounded-lg shadow border-l-4 border-primary">
           <h2 className="text-lg font-semibold mb-4">
             {editingEmployee ? 'Edit Data Karyawan' : 'Tambah Karyawan Baru'}
           </h2>
@@ -212,7 +236,7 @@ export default function EmployeesPage() {
                   required
                   value={formData.full_name}
                   onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -223,7 +247,7 @@ export default function EmployeesPage() {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -234,7 +258,7 @@ export default function EmployeesPage() {
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
                 />
               </div>
               <div>
@@ -244,7 +268,7 @@ export default function EmployeesPage() {
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value as Employee['role'] })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
                 >
                   {roles.map((role) => (
                     <option key={role.value} value={role.value}>{role.label}</option>
@@ -262,14 +286,14 @@ export default function EmployeesPage() {
                   value={formData.pin_code}
                   onChange={(e) => setFormData({ ...formData, pin_code: e.target.value })}
                   placeholder={editingEmployee ? "****" : "Contoh: 1234"}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
                 />
               </div>
             </div>
             <div className="flex space-x-3 pt-4">
               <button
                 type="submit"
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                className="px-4 py-2 bg-secondary text-white rounded-md hover:bg-secondary/90"
               >
                 {editingEmployee ? 'Simpan Perubahan' : 'Simpan Karyawan'}
               </button>
@@ -305,29 +329,27 @@ export default function EmployeesPage() {
                   <div className="text-sm text-gray-500">{employee.email}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 capitalize">
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary/10 text-primary capitalize">
                     {employee.role}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    employee.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${employee.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
                     {employee.is_active ? 'Aktif' : 'Nonaktif'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                   <button
                     onClick={() => toggleEmployeeStatus(employee.id, employee.is_active)}
-                    className={`${
-                      employee.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'
-                    }`}
+                    className={`${employee.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'
+                      }`}
                   >
                     {employee.is_active ? 'Nonaktifkan' : 'Aktifkan'}
                   </button>
                   <button
                     onClick={() => handleEdit(employee)}
-                    className="text-blue-600 hover:text-blue-900 underline"
+                    className="text-primary hover:text-primary underline"
                   >
                     Edit
                   </button>
@@ -337,9 +359,9 @@ export default function EmployeesPage() {
           </tbody>
         </table>
         {employees.length === 0 && (
-           <div className="text-center py-8 text-gray-500">
-              Belum ada karyawan. Klik "+ Tambah Karyawan" untuk memulai.
-           </div>
+          <div className="text-center py-8 text-gray-500">
+            Belum ada karyawan. Klik "+ Tambah Karyawan" untuk memulai.
+          </div>
         )}
       </div>
     </div>

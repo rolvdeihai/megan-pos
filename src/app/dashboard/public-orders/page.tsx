@@ -142,9 +142,9 @@ export default function PublicOrdersPage() {
         {/* Preparing Orders */}
         <div>
           <div className="flex items-center mb-6">
-            <ClockIcon className="w-6 h-6 text-blue-600 mr-3" />
+            <ClockIcon className="w-6 h-6 text-primary mr-3" />
             <h2 className="text-xl font-semibold text-gray-900">Sedang Diproses</h2>
-            <span className="ml-2 bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+            <span className="ml-2 bg-primary/10 text-primary text-xs font-semibold px-2.5 py-0.5 rounded-full">
               {orders.filter(o => o.status === 'preparing').length}
             </span>
           </div>
@@ -152,7 +152,7 @@ export default function PublicOrdersPage() {
             {orders
               .filter(o => o.status === 'preparing')
               .map(order => (
-                <div key={order.id} className="bg-white border-l-4 border-blue-500 shadow rounded-lg p-4">
+                <div key={order.id} className="bg-white border-l-4 border-primary shadow rounded-lg p-4">
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="font-bold">{order.order_number}</h3>
@@ -165,7 +165,7 @@ export default function PublicOrdersPage() {
                     </div>
                     <button
                       onClick={() => updateOrderStatus(order.id, 'completed')}
-                      className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-lg hover:bg-blue-200"
+                      className="px-3 py-1 bg-primary/10 text-primary text-sm rounded-lg hover:bg-primary/20"
                     >
                       Selesai
                     </button>

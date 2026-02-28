@@ -11,6 +11,8 @@ export const metadata: Metadata = {
   description: 'Sistem Point of Sale Modern',
 };
 
+import { ThemeProvider } from '@/components/providers/ThemeProvider';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -20,9 +22,11 @@ export default function RootLayout({
     <html lang="id">
       <body className={inter.className}>
         <AuthProvider>
-          <StaffProvider>
-            {children}
-          </StaffProvider>
+          <ThemeProvider>
+            <StaffProvider>
+              {children}
+            </StaffProvider>
+          </ThemeProvider>
         </AuthProvider>
       </body>
     </html>

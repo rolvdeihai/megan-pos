@@ -13,6 +13,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider'; // Import useAuth
+import { useStaff } from '@/contexts/StaffContext';
+import { getUserRoleLabel } from '@/lib/navigation';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -21,7 +23,10 @@ interface HeaderProps {
 export default function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter();
   // Gunakan useAuth hook
-  const { user } = useAuth();
+  const { user, logout: ownerLogout } = useAuth();
+  const { staff, logout: staffLogout } = useStaff();
+  const currentUser = user || staff;
+  const roleLabel = getUserRoleLabel(currentUser as { user_type?: 'owner' | 'staff'; role_name?: string | null; role?: string | null });
   
   const [restaurant, setRestaurant] = useState<any>(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -30,16 +35,16 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    if (user?.id) {
+    if (currentUser?.id) {
       fetchRestaurantData();
       fetchNotifications();
     }
-  }, [user]);
+  }, [currentUser]);
 
   useEffect(() => {
     // Listen for new orders (real-time)
     // Hanya subscribe jika user ada
-    if (!user?.id) return;
+    if (!currentUser?.id) return;
 
     const channel = supabase
       .channel('orders-header')
@@ -49,7 +54,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
           event: 'INSERT',
           schema: 'public',
           table: 'orders',
-          filter: `user_id=eq.${user.id}`, // Filter hanya order user ini
+          filter: `user_id=eq.${currentUser.user_type === 'staff' ? (currentUser as { user_id?: string }).user_id : currentUser.id}`, // Filter hanya order user ini
         },
         (payload) => {
           // Add new notification
@@ -71,15 +76,18 @@ export default function Header({ onMenuClick }: HeaderProps) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [currentUser]);
 
   const fetchRestaurantData = async () => {
-    if (!user) return;
+    if (!currentUser) return;
+    const ownerId = currentUser.user_type === 'staff'
+      ? (currentUser as { user_id?: string }).user_id
+      : currentUser.id;
 
     const { data: restaurantData } = await supabase
       .from('users')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', ownerId)
       .single();
 
     setRestaurant(restaurantData);
@@ -119,7 +127,11 @@ export default function Header({ onMenuClick }: HeaderProps) {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    if (currentUser?.user_type === 'staff') {
+      await staffLogout();
+    } else {
+      await ownerLogout();
+    }
     router.push('/login');
   };
 
@@ -197,7 +209,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                         {unreadCount > 0 && (
                           <button
                             onClick={markAllAsRead}
-                            className="text-sm text-blue-600 hover:text-blue-700"
+                            className="text-sm text-primary hover:text-primary"
                           >
                             Tandai semua dibaca
                           </button>
@@ -215,7 +227,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                           <div
                             key={notification.id}
                             className={`p-4 border-b hover:bg-gray-50 cursor-pointer ${
-                              !notification.read ? 'bg-blue-50' : ''
+                              !notification.read ? 'bg-primary/10' : ''
                             }`}
                             onClick={() => {
                               // Handle notification click
@@ -224,7 +236,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                           >
                             <div className="flex items-start">
                               <div className={`w-2 h-2 mt-1.5 rounded-full mr-3 ${
-                                notification.read ? 'bg-gray-300' : 'bg-blue-500'
+                                notification.read ? 'bg-gray-300' : 'bg-primary/100'
                               }`} />
                               <div className="flex-1">
                                 <p className="font-medium text-gray-900">
@@ -246,7 +258,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                     <div className="p-4 border-t">
                       <a
                         href="/dashboard/orders"
-                        className="block text-center text-sm text-blue-600 hover:text-blue-700"
+                        className="block text-center text-sm text-primary hover:text-primary"
                         onClick={() => setShowNotifications(false)}
                       >
                         Lihat semua notifikasi
@@ -263,14 +275,14 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-lg transition-colors duration-150"
               >
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <UserCircleIcon className="w-6 h-6 text-blue-600" />
+                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                  <UserCircleIcon className="w-6 h-6 text-primary" />
                 </div>
                 <div className="hidden md:block text-left">
                   <p className="text-sm font-medium text-gray-900 truncate max-w-[120px]">
-                    {user?.email || 'User'}
+                    {currentUser?.email || 'User'}
                   </p>
-                  <p className="text-xs text-gray-500">Administrator</p>
+                  <p className="text-xs text-gray-500">{roleLabel}</p>
                 </div>
                 <ChevronDownIcon className="w-4 h-4 text-gray-400 hidden md:block" />
               </button>
@@ -285,9 +297,9 @@ export default function Header({ onMenuClick }: HeaderProps) {
                     <div className="p-2">
                       <div className="px-3 py-2 border-b">
                         <p className="text-sm font-medium text-gray-900 truncate">
-                          {user?.email}
+                          {currentUser?.email || 'User'}
                         </p>
-                        <p className="text-xs text-gray-500">Owner</p>
+                        <p className="text-xs text-gray-500">{roleLabel}</p>
                       </div>
                       
                       <a

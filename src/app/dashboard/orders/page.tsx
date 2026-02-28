@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import OrderModal from '@/components/orders/OrderModal';
 import InvoiceModal from '@/components/orders/InvoiceModal';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { getOwnerId } from '@/lib/user-scope';
+import { filterOrdersByTab, summarizeOrderTabs } from '@/lib/orders-dashboard-utils';
 
 type Order = {
   id: string;
@@ -24,26 +27,30 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [tables, setTables] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
   const [loading, setLoading] = useState(true);
+  const [orderSummary, setOrderSummary] = useState({ active: 0, completed: 0 });
 
   // Gunakan useAuth yang sudah ada
   const { user, isLoading: authLoading } = useAuth();
+  const ownerId = getOwnerId(user);
+  const router = useRouter();
 
   useEffect(() => {
     if (user?.id) {
       fetchData();
     }
-  }, [activeTab, user]);
+  }, [user]);
 
   const fetchData = async () => {
-    if (!user?.id) return;
-    
+    if (!ownerId) return;
+
     setLoading(true);
-    
+
     try {
       // Fetch orders
       let query = supabase
@@ -53,37 +60,33 @@ export default function OrdersPage() {
           restaurant_tables(table_number),
           order_items(id, quantity)
         `)
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .order('created_at', { ascending: false });
-
-      if (activeTab === 'pending') {
-        query = query.neq('status', 'completed');
-      } else {
-        query = query.eq('status', 'completed');
-      }
 
       const { data: ordersData, error: ordersError } = await query;
 
       if (ordersError) {
         console.error('Error fetching orders:', ordersError);
         setOrders([]);
+        setOrderSummary({ active: 0, completed: 0 });
       } else {
         // Format orders dengan benar
         const formattedOrders = (ordersData || []).map(order => ({
           ...order,
           table_number: order.restaurant_tables?.table_number || null,
-          items_count: order.order_items?.reduce((sum: number, item: any) => 
+          items_count: order.order_items?.reduce((sum: number, item: any) =>
             sum + (item.quantity || 0), 0) || 0
         }));
-        
+
         setOrders(formattedOrders);
+        setOrderSummary(summarizeOrderTabs(formattedOrders));
       }
 
       // Fetch tables
       const { data: tablesData, error: tablesError } = await supabase
         .from('restaurant_tables')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .eq('is_available', true)
         .order('table_number');
 
@@ -97,7 +100,7 @@ export default function OrdersPage() {
       const { data: menuData, error: menuError } = await supabase
         .from('menu_items')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .eq('is_available', true)
         .order('name');
 
@@ -105,6 +108,20 @@ export default function OrdersPage() {
         console.error('Error fetching menu items:', menuError);
       } else {
         setMenuItems(menuData || []);
+      }
+
+      // Fetch menu categories
+      const { data: catData, error: catError } = await supabase
+        .from('menu_categories')
+        .select('*')
+        .eq('user_id', ownerId)
+        .eq('is_active', true)
+        .order('display_order');
+
+      if (catError) {
+        console.error('Error fetching menu categories:', catError);
+      } else {
+        setCategories(catData || []);
       }
     } catch (error) {
       console.error('Error in fetchData:', error);
@@ -114,27 +131,50 @@ export default function OrdersPage() {
   };
 
   const createOrder = async (orderData: any) => {
-    if (!user?.id) return;
-    
+    if (!ownerId || !user) return;
+
+    // --- ENFORCE TRANSACTION LIMIT ---
+    let tier = user.subscription_tier || 'basic';
+    if (tier === 'free') tier = 'basic';
+    if (tier === 'basic') {
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { count, error: countError } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', ownerId)
+        .gte('created_at', startOfMonth.toISOString());
+
+      if (!countError && count !== null && count >= 100) {
+        if (confirm('Batas maksimum 100 transaksi/bulan untuk paket Basic telah tercapai. Apakah Anda ingin meng-upgrade paket?')) {
+          router.push('/dashboard/billing');
+        }
+        return;
+      }
+    }
+    // ---------------------------------
+
     // FIX: Pisahkan 'items' dari data order utama, karena 'items' tidak ada di tabel 'orders'
     const { items, ...orderFields } = orderData;
-    
+
     // Generate order number
     const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
-    
-    const subtotal = items.reduce((sum: number, item: any) => 
+
+    const subtotal = items.reduce((sum: number, item: any) =>
       sum + (item.price * item.quantity), 0);
-    
+
     const taxPercentage = 10; // Default tax
     const taxAmount = subtotal * (taxPercentage / 100);
     const totalAmount = subtotal + taxAmount;
-    
+
     const { data, error } = await supabase
       .from('orders')
       .insert({
         ...orderFields, // Masukkan field lain (table_id, customer_name, dll) kecuali items
         order_number: orderNumber,
-        user_id: user.id,
+        user_id: ownerId,
         status: 'pending',
         subtotal: subtotal,
         tax_percentage: taxPercentage,
@@ -214,12 +254,14 @@ export default function OrdersPage() {
     return (
       <div className="max-w-7xl mx-auto py-8">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Memuat data order...</p>
         </div>
       </div>
     );
   }
+
+  const displayedOrders = filterOrdersByTab(orders, activeTab);
 
   // Tampilkan pesan jika tidak ada user (belum login)
   if (!user) {
@@ -239,7 +281,7 @@ export default function OrdersPage() {
         <h1 className="text-2xl font-bold text-gray-900">Manajemen Order</h1>
         <button
           onClick={() => setShowOrderModal(true)}
-          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+          className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
         >
           + Order Baru
         </button>
@@ -249,46 +291,44 @@ export default function OrdersPage() {
         <nav className="-mb-px flex">
           <button
             onClick={() => setActiveTab('pending')}
-            className={`py-2 px-4 font-medium text-sm ${
-              activeTab === 'pending'
-                ? 'border-b-2 border-blue-500 text-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
+            className={`py-2 px-4 font-medium text-sm ${activeTab === 'pending'
+              ? 'border-b-2 border-primary text-primary'
+              : 'text-gray-500 hover:text-gray-700'
+              }`}
           >
-            Order Aktif ({orders.filter(o => o.status !== 'completed').length})
+            Order Aktif ({orderSummary.active})
           </button>
           <button
             onClick={() => setActiveTab('completed')}
-            className={`py-2 px-4 font-medium text-sm ${
-              activeTab === 'completed'
-                ? 'border-b-2 border-blue-500 text-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
+            className={`py-2 px-4 font-medium text-sm ${activeTab === 'completed'
+              ? 'border-b-2 border-primary text-primary'
+              : 'text-gray-500 hover:text-gray-700'
+              }`}
           >
-            Riwayat Order ({orders.filter(o => o.status === 'completed').length})
+            Riwayat Order ({orderSummary.completed})
           </button>
         </nav>
       </div>
 
-      {orders.length === 0 ? (
+      {displayedOrders.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <div className="text-4xl mb-4">📦</div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Belum ada order</h3>
           <p className="text-gray-600 mb-6">
-            {activeTab === 'pending' 
-              ? 'Tidak ada order yang sedang aktif' 
+            {activeTab === 'pending'
+              ? 'Tidak ada order yang sedang aktif'
               : 'Belum ada riwayat order yang selesai'}
           </p>
           <button
             onClick={() => setShowOrderModal(true)}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+            className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
           >
             + Buat Order Pertama
           </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {orders.map((order) => (
+          {displayedOrders.map((order) => (
             <div
               key={order.id}
               className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow"
@@ -297,18 +337,17 @@ export default function OrdersPage() {
                 <div>
                   <h3 className="font-bold text-lg">{order.order_number}</h3>
                   <p className="text-sm text-gray-600">
-                    {order.table_number ? `Meja ${order.table_number}` : 
-                     order.order_type === 'takeaway' ? 'Takeaway' : 'Delivery'}
+                    {order.table_number ? `Meja ${order.table_number}` :
+                      order.order_type === 'takeaway' ? 'Takeaway' : 'Delivery'}
                   </p>
                 </div>
                 <span
-                  className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                    order.status === 'pending'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : order.status === 'completed'
+                  className={`px-2 py-1 text-xs font-semibold rounded-full ${order.status === 'pending'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : order.status === 'completed'
                       ? 'bg-green-100 text-green-800'
                       : 'bg-gray-100 text-gray-800'
-                  }`}
+                    }`}
                 >
                   {order.status}
                 </span>
@@ -335,18 +374,10 @@ export default function OrdersPage() {
                     setSelectedOrder(order);
                     setShowInvoiceModal(true);
                   }}
-                  className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                  className="flex-1 px-3 py-2 bg-primary text-white text-sm rounded hover:bg-primary/90"
                 >
                   Lihat Detail
                 </button>
-                {order.status !== 'completed' && (
-                  <button
-                    onClick={() => completeOrder(order.id)}
-                    className="flex-1 px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700"
-                  >
-                    Selesaikan
-                  </button>
-                )}
               </div>
             </div>
           ))}
@@ -357,6 +388,7 @@ export default function OrdersPage() {
         <OrderModal
           tables={tables}
           menuItems={menuItems}
+          categories={categories}
           onSubmit={createOrder}
           onClose={() => setShowOrderModal(false)}
         />

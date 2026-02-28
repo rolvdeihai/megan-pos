@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { CogIcon, BellIcon, CreditCardIcon, UserIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/components/auth/AuthProvider';
+import ThemeSettings from '@/components/settings/ThemeSettings';
+import { UserGroupIcon } from '@heroicons/react/24/outline';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -242,7 +244,7 @@ export default function SettingsPage() {
     { key: 'sunday', label: 'Minggu' },
   ];
 
-  if (authLoading || loading) return <div className="max-w-7xl mx-auto py-8 flex justify-center items-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
+  if (authLoading || loading) return <div className="max-w-7xl mx-auto py-8 flex justify-center items-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
 
   if (!user) {
     return (
@@ -269,44 +271,40 @@ export default function SettingsPage() {
             <nav className="space-y-2">
               <button
                 onClick={() => setActiveTab('general')}
-                className={`w-full flex items-center px-4 py-3 rounded-lg text-left ${
-                  activeTab === 'general'
-                    ? 'bg-blue-50 text-blue-700'
+                className={`w-full flex items-center px-4 py-3 rounded-lg text-left ${activeTab === 'general'
+                    ? 'bg-primary/10 text-primary'
                     : 'text-gray-700 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 <UserIcon className="w-5 h-5 mr-3" />
                 Informasi Umum
               </button>
               <button
                 onClick={() => setActiveTab('business')}
-                className={`w-full flex items-center px-4 py-3 rounded-lg text-left ${
-                  activeTab === 'business'
-                    ? 'bg-blue-50 text-blue-700'
+                className={`w-full flex items-center px-4 py-3 rounded-lg text-left ${activeTab === 'business'
+                    ? 'bg-primary/10 text-primary'
                     : 'text-gray-700 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 <CreditCardIcon className="w-5 h-5 mr-3" />
                 Pengaturan Bisnis
               </button>
               <button
                 onClick={() => setActiveTab('appearance')}
-                className={`w-full flex items-center px-4 py-3 rounded-lg text-left ${
-                  activeTab === 'appearance'
-                    ? 'bg-blue-50 text-blue-700'
+                className={`w-full flex items-center px-4 py-3 rounded-lg text-left ${activeTab === 'appearance'
+                    ? 'bg-primary/10 text-primary'
                     : 'text-gray-700 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 <CogIcon className="w-5 h-5 mr-3" />
                 Tampilan
               </button>
               <button
                 onClick={() => setActiveTab('notifications')}
-                className={`w-full flex items-center px-4 py-3 rounded-lg text-left ${
-                  activeTab === 'notifications'
-                    ? 'bg-blue-50 text-blue-700'
+                className={`w-full flex items-center px-4 py-3 rounded-lg text-left ${activeTab === 'notifications'
+                    ? 'bg-primary/10 text-primary'
                     : 'text-gray-700 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 <BellIcon className="w-5 h-5 mr-3" />
                 Notifikasi
@@ -315,7 +313,7 @@ export default function SettingsPage() {
 
             <div className="mt-8 pt-8 border-t">
               <div className="text-sm text-gray-600 mb-2">URL Restoran Anda:</div>
-              <div className="font-medium text-blue-600 break-all mb-1">
+              <div className="font-medium text-primary break-all mb-1">
                 {baseUrl}/{userData?.restaurant_slug}
               </div>
               <div className="flex items-center justify-between mb-2">
@@ -371,7 +369,7 @@ export default function SettingsPage() {
           {activeTab === 'general' && (
             <div className="bg-white rounded-xl shadow p-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Informasi Umum</h2>
-              
+
               <form onSubmit={handleGeneralSubmit} className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -382,7 +380,7 @@ export default function SettingsPage() {
                     required
                     value={generalForm.restaurant_name}
                     onChange={(e) => setGeneralForm({ ...generalForm, restaurant_name: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                   />
                 </div>
 
@@ -411,7 +409,7 @@ export default function SettingsPage() {
                       required
                       value={generalForm.phone}
                       onChange={(e) => setGeneralForm({ ...generalForm, phone: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                       placeholder="08xxxxxxxxxx"
                     />
                   </div>
@@ -425,7 +423,7 @@ export default function SettingsPage() {
                     value={generalForm.address}
                     onChange={(e) => setGeneralForm({ ...generalForm, address: e.target.value })}
                     rows={4}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                     placeholder="Alamat lengkap restoran"
                   />
                 </div>
@@ -434,7 +432,7 @@ export default function SettingsPage() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50"
+                    className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium disabled:opacity-50"
                   >
                     {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
                   </button>
@@ -446,7 +444,7 @@ export default function SettingsPage() {
           {activeTab === 'business' && (
             <div className="bg-white rounded-xl shadow p-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Pengaturan Bisnis</h2>
-              
+
               <form onSubmit={handleBusinessSubmit} className="space-y-8">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Pajak & Biaya</h3>
@@ -462,7 +460,7 @@ export default function SettingsPage() {
                         step="0.1"
                         value={businessForm.tax_percentage}
                         onChange={(e) => setBusinessForm({ ...businessForm, tax_percentage: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                       />
                     </div>
                     <div>
@@ -476,7 +474,7 @@ export default function SettingsPage() {
                         step="0.1"
                         value={businessForm.service_charge_percentage}
                         onChange={(e) => setBusinessForm({ ...businessForm, service_charge_percentage: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                       />
                     </div>
                     <div>
@@ -488,7 +486,7 @@ export default function SettingsPage() {
                         min="0"
                         value={businessForm.delivery_fee}
                         onChange={(e) => setBusinessForm({ ...businessForm, delivery_fee: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                       />
                     </div>
                   </div>
@@ -509,7 +507,7 @@ export default function SettingsPage() {
                           onChange={(e) => setBusinessForm({ ...businessForm, enable_online_orders: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                       </label>
                     </div>
 
@@ -525,7 +523,7 @@ export default function SettingsPage() {
                           onChange={(e) => setBusinessForm({ ...businessForm, enable_table_selection: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                       </label>
                     </div>
 
@@ -541,7 +539,7 @@ export default function SettingsPage() {
                           onChange={(e) => setBusinessForm({ ...businessForm, enable_delivery: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                       </label>
                     </div>
                   </div>
@@ -585,7 +583,7 @@ export default function SettingsPage() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50"
+                    className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium disabled:opacity-50"
                   >
                     {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
                   </button>
@@ -595,161 +593,13 @@ export default function SettingsPage() {
           )}
 
           {activeTab === 'appearance' && (
-            <div className="bg-white rounded-xl shadow p-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Pengaturan Tampilan</h2>
-              
-              <form onSubmit={handleAppearanceSubmit} className="space-y-8">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Warna Tema</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-4">
-                        Warna Primer
-                      </label>
-                      <div className="flex items-center space-x-4">
-                        <input
-                          type="color"
-                          value={appearanceForm.primary_color}
-                          onChange={(e) => setAppearanceForm({ ...appearanceForm, primary_color: e.target.value })}
-                          className="w-16 h-16 cursor-pointer rounded-lg border border-gray-300"
-                        />
-                        <div className="flex-1">
-                          <input
-                            type="text"
-                            value={appearanceForm.primary_color}
-                            onChange={(e) => setAppearanceForm({ ...appearanceForm, primary_color: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono"
-                          />
-                          <p className="mt-2 text-sm text-gray-500">
-                            Warna utama untuk tombol dan aksen
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-4">
-                        Warna Sekunder
-                      </label>
-                      <div className="flex items-center space-x-4">
-                        <input
-                          type="color"
-                          value={appearanceForm.secondary_color}
-                          onChange={(e) => setAppearanceForm({ ...appearanceForm, secondary_color: e.target.value })}
-                          className="w-16 h-16 cursor-pointer rounded-lg border border-gray-300"
-                        />
-                        <div className="flex-1">
-                          <input
-                            type="text"
-                            value={appearanceForm.secondary_color}
-                            onChange={(e) => setAppearanceForm({ ...appearanceForm, secondary_color: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono"
-                          />
-                          <p className="mt-2 text-sm text-gray-500">
-                            Warna untuk header dan elemen sekunder
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-8 p-6 border rounded-lg bg-gradient-to-r from-gray-50 to-white">
-                    <h4 className="font-medium text-gray-900 mb-4">Preview Tema</h4>
-                    <div className="flex items-center space-x-6">
-                      <button
-                        style={{ backgroundColor: appearanceForm.primary_color }}
-                        className="px-6 py-3 text-white rounded-lg font-medium"
-                      >
-                        Tombol Utama
-                      </button>
-                      <div
-                        style={{ backgroundColor: appearanceForm.secondary_color }}
-                        className="px-6 py-3 text-white rounded-lg font-medium"
-                      >
-                        Header
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        Halaman publik: megan.com/{userData?.restaurant_slug}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Logo Restoran</h3>
-                  <div className="flex items-start space-x-6">
-                    <div className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center overflow-hidden">
-                      {appearanceForm.logo_url ? (
-                        <img
-                          src={appearanceForm.logo_url}
-                          alt="Logo"
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <div className="text-center p-4">
-                          <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                          </div>
-                          <p className="text-sm text-gray-500">Upload logo</p>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        URL Logo
-                      </label>
-                      <input
-                        type="url"
-                        value={appearanceForm.logo_url}
-                        onChange={(e) => setAppearanceForm({ ...appearanceForm, logo_url: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="https://example.com/logo.png"
-                      />
-                      <p className="mt-2 text-sm text-gray-500">
-                        Masukkan URL gambar logo Anda (PNG/JPG, maks. 2MB)
-                      </p>
-                      <div className="mt-4 flex space-x-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const url = prompt('Masukkan URL gambar:');
-                            if (url) setAppearanceForm({ ...appearanceForm, logo_url: url });
-                          }}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                        >
-                          Upload Gambar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAppearanceForm({ ...appearanceForm, logo_url: '' })}
-                          className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50"
-                        >
-                          Hapus Logo
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end pt-6 border-t">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50"
-                  >
-                    {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
-                  </button>
-                </div>
-              </form>
-            </div>
+            <ThemeSettings />
           )}
 
           {activeTab === 'notifications' && (
             <div className="bg-white rounded-xl shadow p-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Pengaturan Notifikasi</h2>
-              
+
               <div className="space-y-6">
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div>
@@ -762,7 +612,7 @@ export default function SettingsPage() {
                       defaultChecked
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                   </label>
                 </div>
 
@@ -776,7 +626,7 @@ export default function SettingsPage() {
                       type="checkbox"
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                   </label>
                 </div>
 
@@ -791,7 +641,7 @@ export default function SettingsPage() {
                       defaultChecked
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                   </label>
                 </div>
 
@@ -799,7 +649,7 @@ export default function SettingsPage() {
                   <h4 className="font-medium text-gray-900 mb-4">Nomor WhatsApp Notifikasi</h4>
                   <input
                     type="tel"
-                    className="w-full md:w-1/2 px-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full md:w-1/2 px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                     placeholder="08xxxxxxxxxx"
                   />
                   <p className="mt-2 text-sm text-gray-500">
@@ -809,8 +659,7 @@ export default function SettingsPage() {
 
                 <div className="flex justify-end pt-6 border-t">
                   <button
-                    type="button"
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                    className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium"
                   >
                     Simpan Pengaturan
                   </button>

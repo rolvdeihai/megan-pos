@@ -9,6 +9,12 @@ interface MenuItem {
   price: number;
   is_available: boolean;
   preparation_time?: number;
+  category_id?: string;
+}
+
+interface Category {
+  id: string;
+  name: string;
 }
 
 interface Table {
@@ -21,6 +27,7 @@ interface Table {
 interface OrderModalProps {
   tables: Table[];
   menuItems: MenuItem[];
+  categories: Category[];
   onSubmit: (orderData: any) => void;
   onClose: () => void;
 }
@@ -33,6 +40,7 @@ interface CartItem extends MenuItem {
 export default function OrderModal({
   tables,
   menuItems,
+  categories,
   onSubmit,
   onClose,
 }: OrderModalProps) {
@@ -43,18 +51,17 @@ export default function OrderModal({
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
 
-  const categories = ['all', 'Makanan', 'Minuman', 'Snack', 'Dessert'];
-  const filteredItems = selectedCategory === 'all' 
-    ? menuItems 
-    : menuItems.filter(item => item.name.toLowerCase().includes(selectedCategory.toLowerCase()));
+  const filteredItems = selectedCategoryId === 'all'
+    ? menuItems
+    : menuItems.filter(item => item.category_id === selectedCategoryId);
 
   const addToCart = (item: MenuItem) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === item.id);
       if (existing) {
-        return prev.map(i => 
+        return prev.map(i =>
           i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
         );
       }
@@ -66,7 +73,7 @@ export default function OrderModal({
     setCart(prev => {
       const existing = prev.find(item => item.id === itemId);
       if (existing && existing.quantity > 1) {
-        return prev.map(item => 
+        return prev.map(item =>
           item.id === itemId ? { ...item, quantity: item.quantity - 1 } : item
         );
       }
@@ -97,8 +104,13 @@ export default function OrderModal({
       return;
     }
 
-    if (orderType === 'delivery' && (!customerPhone || !deliveryAddress)) {
-      alert('Isi nomor telepon dan alamat untuk delivery');
+    if ((orderType === 'takeaway' || orderType === 'delivery') && !customerPhone) {
+      alert('Nomor telepon wajib diisi untuk order Takeaway dan Delivery');
+      return;
+    }
+
+    if (orderType === 'delivery' && !deliveryAddress) {
+      alert('Alamat pengiriman wajib diisi untuk delivery');
       return;
     }
 
@@ -157,11 +169,10 @@ export default function OrderModal({
                       key={type.value}
                       type="button"
                       onClick={() => setOrderType(type.value as any)}
-                      className={`flex-1 py-3 px-4 rounded-lg border-2 flex flex-col items-center justify-center ${
-                        orderType === type.value
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                      className={`flex-1 py-3 px-4 rounded-lg border-2 flex flex-col items-center justify-center ${orderType === type.value
+                        ? 'border-primary bg-primary/10'
+                        : 'border-gray-200 hover:border-gray-300'
+                        }`}
                     >
                       <span className="text-2xl mb-2">{type.icon}</span>
                       <span className="font-medium">{type.label}</span>
@@ -177,19 +188,25 @@ export default function OrderModal({
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Pilih Meja
                     </label>
-                    <select
-                      value={selectedTable}
-                      onChange={(e) => setSelectedTable(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      required
-                    >
-                      <option value="">Pilih Meja</option>
-                      {tables.map(table => (
-                        <option key={table.id} value={table.id}>
-                          {table.table_name || `Meja ${table.table_number}`} (Max {table.capacity} orang)
-                        </option>
-                      ))}
-                    </select>
+                    {tables.length === 0 ? (
+                      <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
+                        Tidak ada meja yang tersedia. Harap tambahkan meja di menu Kelola Meja, atau selesaikan pesanan dine-in yang sedang aktif.
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedTable}
+                        onChange={(e) => setSelectedTable(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
+                        required
+                      >
+                        <option value="">Pilih Meja</option>
+                        {tables.map(table => (
+                          <option key={table.id} value={table.id}>
+                            {table.table_name || `Meja ${table.table_number}`} (Max {table.capacity} orang)
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 )}
 
@@ -203,7 +220,7 @@ export default function OrderModal({
                         type="text"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
                         placeholder="Nama customer"
                       />
                     </div>
@@ -215,9 +232,9 @@ export default function OrderModal({
                         type="tel"
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
                         placeholder="08xxxxxxxxxx"
-                        required={orderType === 'delivery'}
+                        required={orderType === 'takeaway' || orderType === 'delivery'}
                       />
                     </div>
                   </div>
@@ -231,7 +248,7 @@ export default function OrderModal({
                     <textarea
                       value={deliveryAddress}
                       onChange={(e) => setDeliveryAddress(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
                       rows={3}
                       placeholder="Alamat lengkap untuk pengiriman"
                       required
@@ -246,7 +263,7 @@ export default function OrderModal({
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
                     rows={2}
                     placeholder="Catatan khusus untuk order ini"
                   />
@@ -259,18 +276,27 @@ export default function OrderModal({
                   Kategori Menu
                 </label>
                 <div className="flex space-x-2 overflow-x-auto pb-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategoryId('all')}
+                    className={`px-4 py-2 rounded-full whitespace-nowrap ${selectedCategoryId === 'all'
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                  >
+                    Semua
+                  </button>
                   {categories.map(category => (
                     <button
-                      key={category}
+                      key={category.id}
                       type="button"
-                      onClick={() => setSelectedCategory(category)}
-                      className={`px-4 py-2 rounded-full whitespace-nowrap ${
-                        selectedCategory === category
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                      onClick={() => setSelectedCategoryId(category.id)}
+                      className={`px-4 py-2 rounded-full whitespace-nowrap ${selectedCategoryId === category.id
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
                     >
-                      {category === 'all' ? 'Semua' : category}
+                      {category.name}
                     </button>
                   ))}
                 </div>
@@ -286,7 +312,7 @@ export default function OrderModal({
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900">{item.name}</h3>
-                        <p className="text-lg font-bold text-blue-600 mt-1">
+                        <p className="text-lg font-bold text-primary mt-1">
                           Rp {item.price.toLocaleString()}
                         </p>
                         {item.preparation_time && (
@@ -297,17 +323,16 @@ export default function OrderModal({
                       </div>
                       <button
                         onClick={() => addToCart(item)}
-                        className="ml-2 p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200"
+                        className="ml-2 p-2 bg-primary/10 text-primary rounded-full hover:bg-primary/20"
                       >
                         <PlusIcon className="w-5 h-5" />
                       </button>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className={`text-sm px-2 py-1 rounded ${
-                        item.is_available
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
+                      <span className={`text-sm px-2 py-1 rounded ${item.is_available
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                        }`}>
                         {item.is_available ? 'Tersedia' : 'Habis'}
                       </span>
                       {cart.find(cartItem => cartItem.id === item.id) && (
@@ -371,7 +396,7 @@ export default function OrderModal({
                           type="text"
                           value={item.specialInstructions || ''}
                           onChange={(e) => updateSpecialInstructions(item.id, e.target.value)}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
                           placeholder="Catatan khusus (optional)"
                         />
                       </div>
@@ -401,8 +426,7 @@ export default function OrderModal({
               <div className="space-y-3">
                 <button
                   onClick={handleSubmit}
-                  disabled={cart.length === 0}
-                  className="w-full py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90"
                 >
                   Buat Order
                 </button>

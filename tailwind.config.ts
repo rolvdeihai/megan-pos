@@ -7,7 +7,10 @@ export default {
   ],
   theme: {
     extend: {
-      // tambahkan custom theme kalau perlu
+      colors: {
+        primary: 'var(--primary)',
+        secondary: 'var(--secondary)',
+      },
     },
   },
   plugins: [],

@@ -87,7 +87,7 @@ export default function MenuItemCard({ item, restaurantSlug, settings }: MenuIte
                 {item.tags.map((tag: string, index: number) => (
                   <span
                     key={index}
-                    className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
+                    className="px-2 py-1 text-xs bg-primary/10 text-primary rounded-full"
                   >
                     {tag}
                   </span>
@@ -98,10 +98,10 @@ export default function MenuItemCard({ item, restaurantSlug, settings }: MenuIte
         )}
 
         <div className="flex items-center justify-between mt-4">
-          <div className="text-lg font-bold text-blue-600">
+          <div className="text-lg font-bold text-primary">
             Rp {item.price.toLocaleString()}
           </div>
-          
+
           <div className="flex items-center space-x-2">
             {quantity > 0 && (
               <>
@@ -118,7 +118,7 @@ export default function MenuItemCard({ item, restaurantSlug, settings }: MenuIte
             )}
             <button
               onClick={addToCart}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm"
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium text-sm"
             >
               {quantity > 0 ? 'Tambah' : 'Tambah ke Keranjang'}
             </button>
