@@ -23,6 +23,22 @@ export function getVisibleDashboardNavItems(permissions: string[] | undefined) {
   return DASHBOARD_NAV_ITEMS.filter((item) => hasPermission(safePermissions, item.permission));
 }
 
+// Mapping role ke bahasa Indonesia
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  cashier: 'Kasir',
+  kitchen: 'Dapur',
+  waiter: 'Pelayan',
+  manager: 'Manager',
+  owner: 'Owner',
+  staff: 'Staff',
+};
+
+export function getRoleLabelInIndonesian(role?: string | null): string {
+  if (!role) return 'Staff';
+  return ROLE_LABELS[role.toLowerCase()] || role;
+}
+
 export function getUserRoleLabel(user?: {
   user_type?: 'owner' | 'staff';
   role_name?: string | null;
@@ -30,7 +46,9 @@ export function getUserRoleLabel(user?: {
 }) {
   if (!user) return 'Guest';
   if (user.user_type === 'staff') {
-    return user.role_name || user.role || 'Staff';
+    // Prioritaskan role_name (dari tabel roles) lalu role (dari tabel employees)
+    const roleValue = user.role_name || user.role;
+    return getRoleLabelInIndonesian(roleValue);
   }
   return 'Owner';
 }
