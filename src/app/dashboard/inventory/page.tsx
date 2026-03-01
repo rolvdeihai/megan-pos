@@ -386,20 +386,20 @@ export default function InventoryPage() {
                   <div className="flex space-x-2">
                     <button
                       onClick={() => updateStock(item.id, 1)}
-                      className="text-green-600 hover:text-green-900"
+                      className="px-2 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-semibold"
                     >
                       +1
                     </button>
                     <button
                       onClick={() => updateStock(item.id, -1)}
-                      className="text-red-600 hover:text-red-900"
+                      className="px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={item.current_stock <= 0}
                     >
                       -1
                     </button>
                     <button
                       onClick={() => updateStock(item.id, 10)}
-                      className="text-primary hover:text-primary"
+                      className="px-2 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-semibold"
                     >
                       +10
                     </button>

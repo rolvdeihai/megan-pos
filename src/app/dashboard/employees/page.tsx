@@ -16,6 +16,8 @@ type Employee = {
   role: 'admin' | 'cashier' | 'kitchen' | 'waiter' | 'manager';
   is_active: boolean;
   pin_code: string;
+  daily_rate?: number;
+  monthly_salary?: number;
   created_at: string;
 };
 
@@ -39,6 +41,8 @@ export default function EmployeesPage() {
     phone: '',
     role: 'cashier' as Employee['role'],
     pin_code: '',
+    daily_rate: '',
+    monthly_salary: '',
   });
 
   const { user, isLoading: authLoading } = useAuth();
@@ -76,6 +80,8 @@ export default function EmployeesPage() {
       phone: employee.phone,
       role: employee.role,
       pin_code: '', // Kosongkan PIN saat edit agar aman (user isi jika ingin ganti)
+      daily_rate: employee.daily_rate?.toString() || '',
+      monthly_salary: employee.monthly_salary?.toString() || '',
     });
     setShowForm(true);
   };
@@ -89,6 +95,8 @@ export default function EmployeesPage() {
       phone: '',
       role: 'cashier',
       pin_code: '',
+      daily_rate: '',
+      monthly_salary: '',
     });
     setShowForm(true);
   };
@@ -106,6 +114,8 @@ export default function EmployeesPage() {
           email: formData.email,
           phone: formData.phone,
           role: formData.role,
+          daily_rate: formData.daily_rate ? parseFloat(formData.daily_rate) : null,
+          monthly_salary: formData.monthly_salary ? parseFloat(formData.monthly_salary) : null,
         };
 
         // Hanya update PIN jika user mengisinya (tidak kosong)
@@ -149,6 +159,8 @@ export default function EmployeesPage() {
 
         const { error } = await supabase.from('employees').insert({
           ...formData,
+          daily_rate: formData.daily_rate ? parseFloat(formData.daily_rate) : null,
+          monthly_salary: formData.monthly_salary ? parseFloat(formData.monthly_salary) : null,
           employee_code: employeeCode,
           user_id: user.id,
           created_by: user.id,
@@ -162,7 +174,7 @@ export default function EmployeesPage() {
       setShowForm(false);
       setEditingEmployee(null);
       setFormData({
-        full_name: '', email: '', phone: '', role: 'cashier', pin_code: '',
+        full_name: '', email: '', phone: '', role: 'cashier', pin_code: '', daily_rate: '', monthly_salary: ''
       });
       fetchEmployees();
 
@@ -286,6 +298,34 @@ export default function EmployeesPage() {
                   value={formData.pin_code}
                   onChange={(e) => setFormData({ ...formData, pin_code: e.target.value })}
                   placeholder={editingEmployee ? "****" : "Contoh: 1234"}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Total Gaji Bulanan Pokok (Opsional)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={formData.monthly_salary}
+                  onChange={(e) => setFormData({ ...formData, monthly_salary: e.target.value })}
+                  placeholder="Bila karyawan digaji bulanan tetap"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Rate Gaji Harian (Opsional)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={formData.daily_rate}
+                  onChange={(e) => setFormData({ ...formData, daily_rate: e.target.value })}
+                  placeholder="Gaji per kedatangan"
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
                 />
               </div>
