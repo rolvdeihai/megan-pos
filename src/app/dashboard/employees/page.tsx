@@ -329,8 +329,8 @@ export default function EmployeesPage() {
                   <div className="text-sm text-gray-500">{employee.email}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary/10 text-primary capitalize">
-                    {employee.role}
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary/10 text-primary">
+                    {roles.find(r => r.value === employee.role)?.label || employee.role}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">

@@ -129,25 +129,39 @@ export default function PublicInvoicePage() {
         return;
       }
 
-      const normalizedItems: InvoiceItem[] = (orderData.order_items || []).map((item: any) => ({
-        name: item.menu_items?.name || 'Menu item',
-        quantity: item.quantity || 0,
-        unit_price: Number(item.unit_price || 0),
-        total_price: Number(item.total_price || 0),
-        special_instructions: item.special_instructions,
-      }));
+      const normalizedItems: InvoiceItem[] = (orderData.order_items || []).map((item: any) => {
+        const qty = Number(item.quantity) || 0;
+        const unitPrice = Number(item.unit_price) || 0;
+        const totalPrice = Number(item.total_price) || (qty * unitPrice);
+        return {
+          name: item.menu_items?.name || 'Menu item',
+          quantity: qty,
+          unit_price: unitPrice,
+          total_price: totalPrice,
+          special_instructions: item.special_instructions,
+        };
+      });
 
+      // Recalculate subtotal from items if order subtotal is 0 or invalid
+      const itemsSubtotal = normalizedItems.reduce((sum, item) => sum + item.total_price, 0);
+      
       const tableRelation: any = orderData.restaurant_tables;
       const tableNumber = Array.isArray(tableRelation)
         ? tableRelation[0]?.table_number
         : tableRelation?.table_number;
 
+      const subtotal = Number(orderData.subtotal) || itemsSubtotal || 0;
+      const taxPercentage = Number(orderData.tax_percentage) || 0;
+      const taxAmount = Number(orderData.tax_amount) || (subtotal * (taxPercentage / 100));
+      const discountAmount = Number(orderData.discount_amount) || 0;
+      const totalAmount = Number(orderData.total_amount) || (subtotal + taxAmount - discountAmount);
+
       setInvoice({
         ...orderData,
-        subtotal: Number(orderData.subtotal || 0),
-        tax_amount: Number(orderData.tax_amount || 0),
-        discount_amount: Number(orderData.discount_amount || 0),
-        total_amount: Number(orderData.total_amount || 0),
+        subtotal,
+        tax_amount: taxAmount,
+        discount_amount: discountAmount,
+        total_amount: totalAmount,
         table_number: tableNumber || null,
         items: normalizedItems,
       });
