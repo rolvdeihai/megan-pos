@@ -32,6 +32,7 @@ interface OrderDetails {
   notes: string;
   created_at: string;
   items: Array<{
+    menu_item_id: string;
     name: string;
     quantity: number;
     unit_price: number;
@@ -60,6 +61,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
           *,
           restaurant_tables(table_number),
           order_items(
+            menu_item_id,
             menu_items(name),
             quantity,
             unit_price,
@@ -72,6 +74,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
 
       if (orderData) {
         const items = orderData.order_items.map((item: any) => ({
+          menu_item_id: item.menu_item_id,
           name: item.menu_items.name,
           quantity: item.quantity,
           unit_price: item.unit_price,
@@ -172,6 +175,39 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
       });
 
       if (transactionError) throw transactionError;
+
+      // Deduct inventory (Sistem Gramasi)
+      if (orderDetails && orderDetails.items.length > 0) {
+        for (const item of orderDetails.items) {
+          // get recipe for this menu item
+          const { data: recipes } = await supabase
+            .from('menu_item_ingredients')
+            .select('*')
+            .eq('menu_item_id', item.menu_item_id);
+
+          if (recipes && recipes.length > 0) {
+            for (const recipe of recipes) {
+              const totalDeduction = recipe.quantity * item.quantity;
+
+              // Call RPC or simple update (using select then update for simplicity here, 
+              // but a DB function would be safer for concurrency)
+              const { data: invItem } = await supabase
+                .from('inventory')
+                .select('current_stock')
+                .eq('id', recipe.inventory_id)
+                .single();
+
+              if (invItem) {
+                const newStock = Math.max(0, invItem.current_stock - totalDeduction);
+                await supabase
+                  .from('inventory')
+                  .update({ current_stock: newStock })
+                  .eq('id', recipe.inventory_id);
+              }
+            }
+          }
+        }
+      }
 
       // Free the table if it's a dine_in order with a table
       if (orderDetails?.table_id) {
