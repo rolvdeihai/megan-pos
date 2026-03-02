@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import OrderModal from '@/components/orders/OrderModal';
 import { useAuth } from '@/components/auth/AuthProvider'; // Tambahkan ini
 import { getOwnerId } from '@/lib/user-scope';
+import { sendOrderEmail } from '@/lib/email-service';
 
 export default function NewOrderPage() {
   const router = useRouter();
@@ -136,6 +137,17 @@ export default function NewOrderPage() {
           .from('restaurant_tables')
           .update({ is_available: false })
           .eq('id', orderFields.table_id);
+      }
+
+      // Send email notification to owner
+      if (user?.email) {
+        await sendOrderEmail({
+          email: user.email,
+          orderNumber: orderNumber,
+          customerName: orderFields.customer_name || 'Tanpa nama',
+          totalAmount: totalAmount,
+          items: items.map((item: any) => `${item.name} x${item.quantity}`),
+        });
       }
 
       router.push('/dashboard/orders');

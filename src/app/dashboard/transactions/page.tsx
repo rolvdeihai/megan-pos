@@ -41,9 +41,10 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  // Default filter: 30 days ago to today
   const [startDate, setStartDate] = useState<Date | null>(() => {
     const date = new Date();
-    date.setDate(1);
+    date.setDate(date.getDate() - 30); // 30 days ago
     return date;
   });
   const [endDate, setEndDate] = useState<Date | null>(new Date());
@@ -88,6 +89,8 @@ export default function TransactionsPage() {
     setLoading(true);
     
     try {
+      // SECURITY: Only fetch transactions for the current logged-in user
+      // RLS policy also enforces this at database level
       let query = supabase
         .from('transactions')
         .select(`
@@ -97,7 +100,7 @@ export default function TransactionsPage() {
             customer_name
           )
         `)
-        .eq('user_id', user.id);
+        .eq('user_id', user.id);  // Filter by current user only
 
       // Apply date filter
       if (startDate) {
@@ -226,6 +229,20 @@ export default function TransactionsPage() {
 
       // For refund, link to order
       if (modalType === 'refund' && formData.order_id) {
+        // Verify the order belongs to current user
+        const { data: orderCheck, error: orderCheckError } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('id', formData.order_id)
+          .eq('user_id', user.id)
+          .single();
+        
+        if (orderCheckError || !orderCheck) {
+          setModalError('Order tidak ditemukan atau bukan milik Anda');
+          setModalLoading(false);
+          return;
+        }
+        
         transactionData.order_id = formData.order_id;
         
         // Update order payment status to refunded
@@ -461,6 +478,67 @@ export default function TransactionsPage() {
               Export CSV
             </button>
           </div>
+        </div>
+
+        {/* Quick Filter Buttons */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            onClick={() => {
+              setStartDate(new Date());
+              setEndDate(new Date());
+            }}
+            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-full text-gray-700"
+          >
+            Hari Ini
+          </button>
+          <button
+            onClick={() => {
+              const date = new Date();
+              date.setDate(date.getDate() - 7);
+              setStartDate(date);
+              setEndDate(new Date());
+            }}
+            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-full text-gray-700"
+          >
+            7 Hari
+          </button>
+          <button
+            onClick={() => {
+              const date = new Date();
+              date.setDate(date.getDate() - 30);
+              setStartDate(date);
+              setEndDate(new Date());
+            }}
+            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-full text-gray-700"
+          >
+            30 Hari
+          </button>
+          <button
+            onClick={() => {
+              const date = new Date();
+              date.setMonth(date.getMonth() - 1);
+              date.setDate(1);
+              setStartDate(date);
+              const endOfMonth = new Date();
+              endOfMonth.setMonth(endOfMonth.getMonth() - 1);
+              endOfMonth.setMonth(endOfMonth.getMonth() + 1, 0);
+              setEndDate(endOfMonth);
+            }}
+            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-full text-gray-700"
+          >
+            Bulan Lalu
+          </button>
+          <button
+            onClick={() => {
+              const date = new Date();
+              date.setDate(1);
+              setStartDate(date);
+              setEndDate(new Date());
+            }}
+            className="px-3 py-1 text-sm bg-primary/10 hover:bg-primary/20 rounded-full text-primary font-medium"
+          >
+            Bulan Ini
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
