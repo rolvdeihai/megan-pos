@@ -135,11 +135,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
     }
   };
 
-  const [isProcessing, setIsProcessing] = useState(false);
-
   const handlePayment = async () => {
-    if (isProcessing) return; // Prevent double click
-    
     if (!paymentMethod) {
       alert('Pilih metode pembayaran terlebih dahulu');
       return;
@@ -150,46 +146,46 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
       return;
     }
 
-    setIsProcessing(true);
-
     try {
-      // Get user_id from orderDetails (fetchOrderDetails now includes it)
-      const userId = orderDetails?.user_id;
-      
-      if (!userId) {
-        throw new Error('User ID not found');
-      }
+      // Update order payment status
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          payment_status: 'paid',
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', order.id);
 
-      // Call API to complete order
-      const response = await fetch('/api/orders/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: order.id,
-          paymentMethod,
-          userId,
-        }),
+      if (error) throw error;
+
+      // Create transaction record
+      const { error: transactionError } = await supabase.from('transactions').insert({
+        user_id: orderDetails?.user_id,
+        order_id: order.id,
+        transaction_number: `TRX-${Date.now().toString().slice(-6)}`,
+        type: 'sale',
+        amount: orderDetails?.total_amount || 0,
+        payment_method: paymentMethod,
+        status: 'completed',
+        notes: `Pembayaran untuk order ${orderDetails?.order_number}`,
       });
 
-      const data = await response.json();
+      if (transactionError) throw transactionError;
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Gagal memproses pembayaran');
-      }
-
-      // If duplicate, just complete without alert (already processed)
-      if (data.duplicate) {
-        onComplete();
-        return;
+      // Free the table if it's a dine_in order with a table
+      if (orderDetails?.table_id) {
+        await supabase
+          .from('restaurant_tables')
+          .update({ is_available: true })
+          .eq('id', orderDetails.table_id);
       }
 
       alert('Pembayaran berhasil!');
       onComplete();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error processing payment:', error);
-      alert(error.message || 'Terjadi kesalahan saat memproses pembayaran');
-    } finally {
-      setIsProcessing(false);
+      alert('Terjadi kesalahan saat memproses pembayaran');
     }
   };
 
@@ -451,20 +447,11 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
                 {/* Payment Button */}
                 <button
                   onClick={handlePayment}
-                  disabled={isProcessing || !paymentMethod || (paymentMethod === 'cash' && cashReceived < orderDetails.total_amount)}
+                  disabled={!paymentMethod || (paymentMethod === 'cash' && cashReceived < orderDetails.total_amount)}
                   className="w-full py-4 bg-primary text-white rounded-lg font-bold text-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
-                  {isProcessing ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Memproses...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircleIcon className="w-6 h-6 mr-2" />
-                      Konfirmasi Pembayaran
-                    </>
-                  )}
+                  <CheckCircleIcon className="w-6 h-6 mr-2" />
+                  Konfirmasi Pembayaran
                 </button>
               </div>
             </div>

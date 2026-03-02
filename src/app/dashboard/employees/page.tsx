@@ -14,19 +14,12 @@ type Employee = {
   email: string;
   phone: string;
   role: 'admin' | 'cashier' | 'kitchen' | 'waiter' | 'manager';
-  role_id: string | null;
   is_active: boolean;
   pin_code: string;
   created_at: string;
 };
 
-type CustomRole = {
-  id: string;
-  name: string;
-};
-
-// Legacy roles for backward compatibility
-const legacyRoles = [
+const roles = [
   { value: 'admin', label: 'Admin' },
   { value: 'cashier', label: 'Kasir' },
   { value: 'kitchen', label: 'Dapur' },
@@ -36,18 +29,15 @@ const legacyRoles = [
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [customRoles, setCustomRoles] = useState<CustomRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-  const [useCustomRole, setUseCustomRole] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null); // State untuk mode Edit
 
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
     phone: '',
     role: 'cashier' as Employee['role'],
-    role_id: '',
     pin_code: '',
   });
 
@@ -57,7 +47,6 @@ export default function EmployeesPage() {
   useEffect(() => {
     if (user?.id) {
       fetchEmployees();
-      fetchCustomRoles();
     }
   }, [user]);
 
@@ -78,42 +67,27 @@ export default function EmployeesPage() {
     setLoading(false);
   };
 
-  const fetchCustomRoles = async () => {
-    try {
-      const response = await fetch('/api/roles');
-      if (response.ok) {
-        const data = await response.json();
-        setCustomRoles(data.roles || []);
-      }
-    } catch (error) {
-      console.error('Error fetching custom roles:', error);
-    }
-  };
-
+  // Fungsi untuk membuka mode Edit
   const handleEdit = (employee: Employee) => {
     setEditingEmployee(employee);
-    const hasCustomRole = !!employee.role_id;
-    setUseCustomRole(hasCustomRole);
     setFormData({
       full_name: employee.full_name,
       email: employee.email,
       phone: employee.phone,
       role: employee.role,
-      role_id: employee.role_id || '',
-      pin_code: '',
+      pin_code: '', // Kosongkan PIN saat edit agar aman (user isi jika ingin ganti)
     });
     setShowForm(true);
   };
 
+  // Fungsi untuk mereset form (Mode Tambah)
   const handleAddNew = () => {
     setEditingEmployee(null);
-    setUseCustomRole(false);
     setFormData({
       full_name: '',
       email: '',
       phone: '',
       role: 'cashier',
-      role_id: '',
       pin_code: '',
     });
     setShowForm(true);
@@ -124,32 +98,24 @@ export default function EmployeesPage() {
     if (!user?.id) return;
 
     try {
-      // Prepare data
-      const submitData: any = {
-        full_name: formData.full_name,
-        email: formData.email,
-        phone: formData.phone,
-      };
-
-      // Set role based on selection
-      if (useCustomRole && formData.role_id) {
-        submitData.role_id = formData.role_id;
-        // Keep legacy role for backward compatibility
-        submitData.role = 'admin';
-      } else {
-        submitData.role = formData.role;
-        submitData.role_id = null;
-      }
-
       if (editingEmployee) {
         // --- MODE EDIT ---
+        // Siapkan data update
+        const updateData: any = {
+          full_name: formData.full_name,
+          email: formData.email,
+          phone: formData.phone,
+          role: formData.role,
+        };
+
+        // Hanya update PIN jika user mengisinya (tidak kosong)
         if (formData.pin_code && formData.pin_code.length === 4) {
-          submitData.pin_code = formData.pin_code;
+          updateData.pin_code = formData.pin_code;
         }
 
         const { error } = await supabase
           .from('employees')
-          .update(submitData)
+          .update(updateData)
           .eq('id', editingEmployee.id);
 
         if (error) throw error;
@@ -178,22 +144,25 @@ export default function EmployeesPage() {
         }
         // -------------------------------------
 
+        // --- MODE TAMBAH BARU ---
         const employeeCode = `EMP${Date.now().toString().slice(-6)}`;
-        submitData.employee_code = employeeCode;
-        submitData.user_id = user.id;
-        submitData.created_by = user.id;
-        submitData.pin_code = formData.pin_code;
 
-        const { error } = await supabase.from('employees').insert(submitData);
+        const { error } = await supabase.from('employees').insert({
+          ...formData,
+          employee_code: employeeCode,
+          user_id: user.id,
+          created_by: user.id,
+        });
 
         if (error) throw error;
         alert('Karyawan berhasil ditambahkan');
       }
 
+      // Reset dan tutup form
       setShowForm(false);
       setEditingEmployee(null);
       setFormData({
-        full_name: '', email: '', phone: '', role: 'cashier', role_id: '', pin_code: '',
+        full_name: '', email: '', phone: '', role: 'cashier', pin_code: '',
       });
       fetchEmployees();
 
@@ -215,14 +184,6 @@ export default function EmployeesPage() {
       console.error('Error updating status:', error);
       alert('Gagal mengubah status');
     }
-  };
-
-  const getRoleLabel = (employee: Employee) => {
-    if (employee.role_id) {
-      const customRole = customRoles.find(r => r.id === employee.role_id);
-      if (customRole) return customRole.name;
-    }
-    return legacyRoles.find(r => r.value === employee.role)?.label || employee.role;
   };
 
   if (authLoading || loading) {
@@ -249,29 +210,16 @@ export default function EmployeesPage() {
 
   return (
     <div className="max-w-7xl mx-auto py-8">
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Manajemen Karyawan</h1>
-          <p className="mt-1 text-gray-600">Kelola karyawan dan atur role akses mereka</p>
-        </div>
-        <div className="flex space-x-3">
-          <a
-            href="/dashboard/roles"
-            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
-          >
-            ⚙️ Kelola Role
-          </a>
-          <button
-            onClick={handleAddNew}
-            className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
-          >
-            + Tambah Karyawan
-          </button>
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">Manajemen Karyawan</h1>
+        <button
+          onClick={handleAddNew}
+          className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
+        >
+          + Tambah Karyawan
+        </button>
       </div>
 
-      {/* Form Modal */}
       {showForm && (
         <div className="mb-8 p-6 bg-white rounded-lg shadow border-l-4 border-primary">
           <h2 className="text-lg font-semibold mb-4">
@@ -281,7 +229,7 @@ export default function EmployeesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Nama Lengkap *
+                  Nama Lengkap
                 </label>
                 <input
                   type="text"
@@ -313,76 +261,20 @@ export default function EmployeesPage() {
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
                 />
               </div>
-
-              {/* Role Selection */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Role *
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Role
                 </label>
-                
-                {/* Toggle between Legacy and Custom Role */}
-                <div className="flex items-center space-x-4 mb-3">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      checked={!useCustomRole}
-                      onChange={() => setUseCustomRole(false)}
-                      className="text-primary focus:ring-primary"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Role Standar</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      checked={useCustomRole}
-                      onChange={() => setUseCustomRole(true)}
-                      className="text-primary focus:ring-primary"
-                      disabled={customRoles.length === 0}
-                    />
-                    <span className="ml-2 text-sm text-gray-700">
-                      Role Custom {customRoles.length === 0 && '(Belum ada)'}
-                    </span>
-                  </label>
-                </div>
-
-                {/* Legacy Role Select */}
-                {!useCustomRole && (
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value as Employee['role'] })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
-                  >
-                    {legacyRoles.map((role) => (
-                      <option key={role.value} value={role.value}>{role.label}</option>
-                    ))}
-                  </select>
-                )}
-
-                {/* Custom Role Select */}
-                {useCustomRole && (
-                  <select
-                    value={formData.role_id}
-                    onChange={(e) => setFormData({ ...formData, role_id: e.target.value })}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
-                    required
-                  >
-                    <option value="">Pilih Role Custom...</option>
-                    {customRoles.map((role) => (
-                      <option key={role.id} value={role.id}>{role.name}</option>
-                    ))}
-                  </select>
-                )}
-
-                {customRoles.length === 0 && (
-                  <p className="mt-2 text-sm text-gray-500">
-                    Belum ada role custom.{' '}
-                    <a href="/dashboard/roles" className="text-primary hover:underline">
-                      Buat role custom
-                    </a>
-                  </p>
-                )}
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as Employee['role'] })}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
+                >
+                  {roles.map((role) => (
+                    <option key={role.value} value={role.value}>{role.label}</option>
+                  ))}
+                </select>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   PIN Code (4 digit) {editingEmployee && <span className="text-xs text-gray-400 font-normal">- Isi hanya jika ingin mengubah</span>}
@@ -394,7 +286,6 @@ export default function EmployeesPage() {
                   value={formData.pin_code}
                   onChange={(e) => setFormData({ ...formData, pin_code: e.target.value })}
                   placeholder={editingEmployee ? "****" : "Contoh: 1234"}
-                  required={!editingEmployee}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
                 />
               </div>
@@ -438,9 +329,8 @@ export default function EmployeesPage() {
                   <div className="text-sm text-gray-500">{employee.email}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${employee.role_id ? 'bg-purple-100 text-purple-800' : 'bg-primary/10 text-primary'}`}>
-                    {getRoleLabel(employee)}
-                    {employee.role_id && ' (Custom)'}
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary/10 text-primary">
+                    {roles.find(r => r.value === employee.role)?.label || employee.role}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
