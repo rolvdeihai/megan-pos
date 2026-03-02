@@ -8,6 +8,7 @@ import InvoiceModal from '@/components/orders/InvoiceModal';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { getOwnerId } from '@/lib/user-scope';
 import { filterOrdersByTab, summarizeOrderTabs } from '@/lib/orders-dashboard-utils';
+import { sendOrderEmail } from '@/lib/email-service';
 
 type Order = {
   id: string;
@@ -208,6 +209,17 @@ export default function OrdersPage() {
           .eq('id', orderFields.table_id);
       }
 
+      // Send email notification to owner
+      if (user?.email) {
+        await sendOrderEmail({
+          email: user.email,
+          orderNumber: orderNumber,
+          customerName: orderFields.customer_name || 'Tanpa nama',
+          totalAmount: totalAmount,
+          items: items.map((item: any) => `${item.name} x${item.quantity}`),
+        });
+      }
+
       fetchData();
       setShowOrderModal(false);
     } else {
@@ -216,22 +228,28 @@ export default function OrdersPage() {
     }
   };
 
+  const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
+
   const completeOrder = async (orderId: string) => {
+    if (processingOrderId) return; // Prevent double click
+    
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
-    try {
-      // Update order status
-      const { error: orderError } = await supabase
-        .from('orders')
-        .update({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-          payment_status: 'paid',
-        })
-        .eq('id', orderId);
+    setProcessingOrderId(orderId);
 
-      if (orderError) throw orderError;
+    try {
+      const response = await fetch('/api/orders/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          paymentMethod: 'cash',
+          userId: ownerId,
+        }),
+      });
+
+      const data = await response.json();
 
       // Create transaction record
       const { error: transactionError } = await supabase.from('transactions').insert({
@@ -296,11 +314,24 @@ export default function OrdersPage() {
           .eq('id', order.table_id);
       }
 
+      // If duplicate, just proceed without error
+      if (data.duplicate) {
+        fetchData();
+        setShowInvoiceModal(false);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Gagal menyelesaikan order');
+      }
+
       fetchData();
       setShowInvoiceModal(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error completing order:', error);
-      alert('Gagal menyelesaikan order');
+      alert(error.message || 'Gagal menyelesaikan order');
+    } finally {
+      setProcessingOrderId(null);
     }
   };
 
