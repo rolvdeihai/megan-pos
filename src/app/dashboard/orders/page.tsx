@@ -233,6 +233,61 @@ export default function OrdersPage() {
 
       if (orderError) throw orderError;
 
+      // Create transaction record
+      const { error: transactionError } = await supabase.from('transactions').insert({
+        user_id: user?.id,
+        order_id: orderId,
+        transaction_number: `TRX-${Date.now().toString().slice(-6)}`,
+        type: 'sale',
+        amount: order.total_amount,
+        payment_method: 'cash', // Default fallback if paid via shortcut
+        status: 'completed',
+        notes: `Pembayaran langsung dari dashboard untuk order ${order.order_number}`,
+      });
+
+      if (transactionError) throw transactionError;
+
+      // Deduct inventory (Sistem Gramasi)
+      const { data: orderWithItems } = await supabase
+        .from('orders')
+        .select(`
+          order_items(
+            menu_item_id,
+            quantity
+          )
+        `)
+        .eq('id', orderId)
+        .single();
+
+      if (orderWithItems && orderWithItems.order_items) {
+        for (const item of orderWithItems.order_items) {
+          const { data: recipes } = await supabase
+            .from('menu_item_ingredients')
+            .select('*')
+            .eq('menu_item_id', item.menu_item_id);
+
+          if (recipes && recipes.length > 0) {
+            for (const recipe of recipes) {
+              const totalDeduction = recipe.quantity * (+item.quantity || 1);
+
+              const { data: invItem } = await supabase
+                .from('inventory')
+                .select('current_stock')
+                .eq('id', recipe.inventory_id)
+                .single();
+
+              if (invItem) {
+                const newStock = Math.max(0, invItem.current_stock - totalDeduction);
+                await supabase
+                  .from('inventory')
+                  .update({ current_stock: newStock })
+                  .eq('id', recipe.inventory_id);
+              }
+            }
+          }
+        }
+      }
+
       // Free the table if dine-in
       if (order.table_id) {
         await supabase
