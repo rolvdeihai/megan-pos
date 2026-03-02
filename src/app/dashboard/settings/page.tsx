@@ -6,6 +6,7 @@ import { CogIcon, BellIcon, CreditCardIcon, UserIcon, ClipboardDocumentIcon } fr
 import { useAuth } from '@/components/auth/AuthProvider';
 import ThemeSettings from '@/components/settings/ThemeSettings';
 import { UserGroupIcon } from '@heroicons/react/24/outline';
+import OTPInput from '@/components/auth/OTPInput';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -25,6 +26,15 @@ export default function SettingsPage() {
     address: '',
     email: '',
   });
+
+  const [passwordForm, setPasswordForm] = useState({
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [passwordStep, setPasswordStep] = useState<'otp' | 'newPassword'>('otp');
+  const [otp, setOtp] = useState('');
+  const [otpError, setOtpError] = useState(false);
+  const [countdown, setCountdown] = useState(0);
 
   const [businessForm, setBusinessForm] = useState({
     tax_percentage: 10,
@@ -141,6 +151,135 @@ export default function SettingsPage() {
     } catch (error) {
       console.error('Error updating general settings:', error);
       alert('Terjadi kesalahan saat menyimpan');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startCountdown = () => {
+    setCountdown(60);
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleSendOTP = async () => {
+    if (!user?.email) return;
+    
+    setSaving(true);
+    try {
+      const response = await fetch('/api/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user.email,
+          type: 'forgot_password',
+          name: userData?.full_name,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Gagal mengirim OTP');
+      }
+
+      
+
+      startCountdown();
+      setOtp(''); // Reset OTP input
+      alert('Kode OTP telah dikirim ke email Anda');
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (otp.length !== 6) {
+      setOtpError(true);
+      return;
+    }
+
+    setSaving(true);
+    setOtpError(false);
+
+    try {
+      const response = await fetch('/api/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user?.email,
+          otp,
+          type: 'forgot_password',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'OTP tidak valid');
+      }
+
+      setPasswordStep('newPassword');
+    } catch (error: any) {
+      alert(error.message);
+      setOtpError(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.id) return;
+
+    if (passwordForm.newPassword.length < 6) {
+      alert('Password baru minimal 6 karakter');
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      alert('Password baru dan konfirmasi password tidak sama');
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      // Update password via API (without current password, already verified with OTP)
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user.email,
+          password: passwordForm.newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Gagal mengubah password');
+      }
+
+      alert('Password berhasil diubah');
+      setPasswordForm({
+        newPassword: '',
+        confirmPassword: '',
+      });
+      setOtp('');
+      setPasswordStep('otp');
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      alert(error.message || 'Terjadi kesalahan saat mengubah password');
     } finally {
       setSaving(false);
     }
@@ -426,6 +565,106 @@ export default function SettingsPage() {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                     placeholder="Alamat lengkap restoran"
                   />
+                </div>
+
+                {/* Change Password Section */}
+                <div className="pt-6 border-t">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Ganti Password</h3>
+                  
+                  {passwordStep === 'otp' && (
+                    <div className="space-y-4">
+                      <p className="text-sm text-gray-600">
+                        Kode OTP akan dikirim ke email: <span className="font-medium">{user?.email}</span>
+                      </p>
+                      
+                      {/* OTP Input - always show when in otp step */}
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Kode OTP
+                          </label>
+                          <OTPInput
+                            length={6}
+                            value={otp}
+                            onChange={setOtp}
+                            disabled={saving}
+                            error={otpError}
+                          />
+                        </div>
+                        <div className="flex gap-3">
+                          <button
+                            type="button"
+                            onClick={handleVerifyOTP}
+                            disabled={saving || otp.length !== 6}
+                            className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium disabled:opacity-50"
+                          >
+                            {saving ? 'Memverifikasi...' : 'Verifikasi OTP'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSendOTP}
+                            disabled={saving || countdown > 0}
+                            className="px-4 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50"
+                          >
+                            {countdown > 0 ? `Kirim ulang (${countdown}s)` : 'Kirim OTP'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {passwordStep === 'newPassword' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Password Baru
+                        </label>
+                        <input
+                          type="password"
+                          value={passwordForm.newPassword}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
+                          placeholder="Minimal 6 karakter"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Konfirmasi Password Baru
+                        </label>
+                        <input
+                          type="password"
+                          value={passwordForm.confirmPassword}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
+                          placeholder="Ulangi password baru"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {passwordStep === 'newPassword' && (
+                    <div className="mt-4 flex gap-3">
+                      <button
+                        type="button"
+                        onClick={handlePasswordSubmit}
+                        disabled={saving || !passwordForm.newPassword || !passwordForm.confirmPassword}
+                        className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium disabled:opacity-50"
+                      >
+                        {saving ? 'Menyimpan...' : 'Simpan Password Baru'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPasswordStep('otp');
+                          setOtp('');
+                          setPasswordForm({ newPassword: '', confirmPassword: '' });
+                        }}
+                        className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end pt-6 border-t">
