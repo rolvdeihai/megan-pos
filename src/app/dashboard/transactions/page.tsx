@@ -44,9 +44,14 @@ export default function TransactionsPage() {
   const [startDate, setStartDate] = useState<Date | null>(() => {
     const date = new Date();
     date.setDate(1);
+    date.setHours(0, 0, 0, 0);
     return date;
   });
-  const [endDate, setEndDate] = useState<Date | null>(new Date());
+  const [endDate, setEndDate] = useState<Date | null>(() => {
+    const date = new Date();
+    date.setHours(23, 59, 59, 999);
+    return date;
+  });
   const [paymentMethod, setPaymentMethod] = useState<string>('all');
   const [transactionType, setTransactionType] = useState<string>('all');
   const [summary, setSummary] = useState({
@@ -56,13 +61,13 @@ export default function TransactionsPage() {
     netIncome: 0,
     totalTransactions: 0,
   });
-  
+
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'expense' | 'refund'>('expense');
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
-  
+
   // Form state
   const [formData, setFormData] = useState({
     amount: '',
@@ -84,10 +89,12 @@ export default function TransactionsPage() {
 
   const fetchTransactions = async () => {
     if (!user?.id) return;
-    
+
     setLoading(true);
-    
+
     try {
+      const ownerId = user.user_type === 'staff' ? user.user_id : user.id;
+
       let query = supabase
         .from('transactions')
         .select(`
@@ -97,16 +104,18 @@ export default function TransactionsPage() {
             customer_name
           )
         `)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       // Apply date filter
       if (startDate) {
-        query = query.gte('created_at', startDate.toISOString());
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        query = query.gte('created_at', start.toISOString());
       }
       if (endDate) {
-        const nextDay = new Date(endDate);
-        nextDay.setDate(nextDay.getDate() + 1);
-        query = query.lt('created_at', nextDay.toISOString());
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query = query.lte('created_at', end.toISOString());
       }
 
       // Apply payment method filter
@@ -160,12 +169,14 @@ export default function TransactionsPage() {
 
   const fetchPaidOrders = async () => {
     if (!user?.id) return;
-    
+
     try {
+      const ownerId = user.user_type === 'staff' ? user.user_id : user.id;
+
       const { data, error } = await supabase
         .from('orders')
         .select('id, order_number, customer_name, total_amount, payment_status')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .eq('payment_status', 'paid')
         .order('created_at', { ascending: false })
         .limit(50);
@@ -194,7 +205,7 @@ export default function TransactionsPage() {
 
   const handleSubmitExpenseRefund = async () => {
     if (!user?.id) return;
-    
+
     // Validation
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
       setModalError('Jumlah harus lebih dari 0');
@@ -210,16 +221,17 @@ export default function TransactionsPage() {
     setModalError('');
 
     try {
+      const ownerId = user.user_type === 'staff' ? user.user_id : user.id;
       const transactionNumber = `${modalType === 'expense' ? 'EXP' : 'REF'}-${Date.now().toString().slice(-6)}`;
-      
+
       const transactionData: any = {
-        user_id: user.id,
+        user_id: ownerId,
         transaction_number: transactionNumber,
         type: modalType,
         amount: parseFloat(formData.amount),
         payment_method: formData.payment_method,
         status: 'completed',
-        notes: modalType === 'expense' 
+        notes: modalType === 'expense'
           ? `${formData.expense_category}: ${formData.notes || 'Tidak ada catatan'}`
           : `Refund: ${formData.refund_reason || 'Tidak ada alasan'}`,
       };
@@ -227,13 +239,13 @@ export default function TransactionsPage() {
       // For refund, link to order
       if (modalType === 'refund' && formData.order_id) {
         transactionData.order_id = formData.order_id;
-        
+
         // Update order payment status to refunded
         await supabase
           .from('orders')
           .update({ payment_status: 'refunded' })
           .eq('id', formData.order_id)
-          .eq('user_id', user.id);
+          .eq('user_id', ownerId);
       }
 
       const { error } = await supabase
@@ -245,7 +257,7 @@ export default function TransactionsPage() {
       // Close modal and refresh data
       setShowModal(false);
       fetchTransactions();
-      
+
       // Reset form
       setFormData({
         amount: '',
@@ -282,9 +294,9 @@ export default function TransactionsPage() {
       new Date(transaction.created_at).toLocaleDateString('id-ID'),
       transaction.type === 'sale' ? 'Penjualan' : transaction.type === 'refund' ? 'Refund' : 'Pengeluaran',
       transaction.amount,
-      transaction.payment_method === 'cash' ? 'Cash' : 
-        transaction.payment_method === 'card' ? 'Card' : 
-        transaction.payment_method === 'qris' ? 'QRIS' : 'Transfer',
+      transaction.payment_method === 'cash' ? 'Cash' :
+        transaction.payment_method === 'card' ? 'Card' :
+          transaction.payment_method === 'qris' ? 'QRIS' : 'Transfer',
       transaction.status === 'completed' ? 'Selesai' : 'Pending',
       transaction.order_number || '-',
       transaction.customer_name || '-',
@@ -411,15 +423,13 @@ export default function TransactionsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Pendapatan Bersih</p>
-              <p className={`text-2xl font-bold mt-2 ${
-                summary.netIncome >= 0 ? 'text-green-600' : 'text-red-600'
-              }`}>
+              <p className={`text-2xl font-bold mt-2 ${summary.netIncome >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
                 Rp {summary.netIncome.toLocaleString()}
               </p>
             </div>
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-              summary.netIncome >= 0 ? 'bg-green-100' : 'bg-red-100'
-            }`}>
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${summary.netIncome >= 0 ? 'bg-green-100' : 'bg-red-100'
+              }`}>
               <span className="text-2xl">{summary.netIncome >= 0 ? '💰' : '📉'}</span>
             </div>
           </div>
@@ -580,8 +590,8 @@ export default function TransactionsPage() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <span className={`px-2 py-1 text-xs font-semibold rounded-full mr-2 ${getTypeColor(transaction.type)}`}>
-                        {transaction.type === 'sale' ? 'Penjualan' : 
-                         transaction.type === 'refund' ? 'Refund' : 'Pengeluaran'}
+                        {transaction.type === 'sale' ? 'Penjualan' :
+                          transaction.type === 'refund' ? 'Refund' : 'Pengeluaran'}
                       </span>
                       <span className="text-lg">
                         {getPaymentMethodIcon(transaction.payment_method)}
@@ -592,12 +602,11 @@ export default function TransactionsPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className={`text-sm font-semibold ${
-                      transaction.type === 'sale' ? 'text-green-600' : 
+                    <div className={`text-sm font-semibold ${transaction.type === 'sale' ? 'text-green-600' :
                       transaction.type === 'refund' ? 'text-red-600' : 'text-yellow-600'
-                    }`}>
-                      {transaction.type === 'sale' ? '+' : 
-                       transaction.type === 'refund' ? '-' : '-'}
+                      }`}>
+                      {transaction.type === 'sale' ? '+' :
+                        transaction.type === 'refund' ? '-' : '-'}
                       Rp {transaction.amount.toLocaleString()}
                     </div>
                   </td>
@@ -616,11 +625,10 @@ export default function TransactionsPage() {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                      transaction.status === 'completed'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${transaction.status === 'completed'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                      }`}>
                       {transaction.status === 'completed' ? 'Selesai' : 'Pending'}
                     </span>
                   </td>
@@ -804,7 +812,7 @@ export default function TransactionsPage() {
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
                   rows={3}
-                  placeholder={modalType === 'expense' 
+                  placeholder={modalType === 'expense'
                     ? 'Contoh: Beli bahan baku bulanan, Bayar listrik Januari, dll.'
                     : 'Catatan tambahan untuk transaksi ini...'}
                 />

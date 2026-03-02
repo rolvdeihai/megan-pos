@@ -22,6 +22,21 @@ type MenuItem = {
   tags: string[];
 };
 
+type InventoryItem = {
+  id: string;
+  name: string;
+  unit: string;
+  category: string;
+};
+
+type RecipeItem = {
+  inventory_id: string;
+  inventory_name?: string;
+  inventory_unit?: string;
+  quantity: number;
+  unit: string;
+};
+
 type Category = {
   id: string;
   name: string;
@@ -33,6 +48,7 @@ type Category = {
 export default function MenuPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showItemModal, setShowItemModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -54,6 +70,7 @@ export default function MenuPage() {
     preparation_time: '',
     category_id: '',
     tags: '',
+    recipeItems: [] as RecipeItem[],
   });
 
   const [categoryForm, setCategoryForm] = useState({
@@ -73,12 +90,12 @@ export default function MenuPage() {
       if (selectedCategory !== 'all' && item.category_id !== selectedCategory) {
         return false;
       }
-      
+
       // Filter by search term
       if (searchTerm && !item.name.toLowerCase().includes(searchTerm.toLowerCase())) {
         return false;
       }
-      
+
       return true;
     });
   }, [menuItems, selectedCategory, searchTerm]);
@@ -91,10 +108,10 @@ export default function MenuPage() {
   const fetchData = async () => {
     if (!user || !ownerId) return;
     if (!ownerId) return;
-    
+
     try {
       setLoading(true);
-      
+
       // Fetch categories
       const { data: categoriesData, error: catError } = await supabase
         .from('menu_categories')
@@ -106,6 +123,19 @@ export default function MenuPage() {
         console.error('Error fetching categories:', catError);
       } else {
         setCategories(categoriesData || []);
+      }
+
+      // Fetch inventory for recipes
+      const { data: invData, error: invError } = await supabase
+        .from('inventory')
+        .select('id, name, unit, category')
+        .eq('user_id', ownerId)
+        .order('name');
+
+      if (invError) {
+        console.error('Error fetching inventory:', invError);
+      } else {
+        setInventoryItems(invData || []);
       }
 
       // Fetch menu items with category names
@@ -140,8 +170,10 @@ export default function MenuPage() {
 
     const sku = itemForm.sku || `SKU-${Date.now().toString().slice(-6)}`;
 
+    const { recipeItems, ...restForm } = itemForm;
+
     const itemData = {
-      ...itemForm,
+      ...restForm,
       sku,
       user_id: ownerId,
       price: parseFloat(itemForm.price) || 0,
@@ -151,6 +183,8 @@ export default function MenuPage() {
     };
 
     try {
+      let menuItemId = editingItem?.id;
+
       if (editingItem) {
         const { error } = await supabase
           .from('menu_items')
@@ -158,15 +192,45 @@ export default function MenuPage() {
           .eq('id', editingItem.id);
 
         if (error) throw error;
-        alert('Item berhasil diperbarui');
       } else {
-        const { error } = await supabase
+        const { data: newItem, error } = await supabase
           .from('menu_items')
-          .insert(itemData);
+          .insert(itemData)
+          .select()
+          .single();
 
         if (error) throw error;
-        alert('Item berhasil ditambahkan');
+        menuItemId = newItem.id;
       }
+
+      // Save Recipe Items (menu_item_ingredients)
+      if (menuItemId) {
+        // Delete existing recipe items first
+        await supabase
+          .from('menu_item_ingredients')
+          .delete()
+          .eq('menu_item_id', menuItemId);
+
+        // Insert new recipe items
+        if (itemForm.recipeItems.length > 0) {
+          const recipeRows = itemForm.recipeItems.map((ri) => ({
+            menu_item_id: menuItemId,
+            inventory_id: ri.inventory_id,
+            quantity: ri.quantity,
+            unit: ri.unit || 'gram',
+          }));
+
+          const { error: recipeError } = await supabase
+            .from('menu_item_ingredients')
+            .insert(recipeRows);
+
+          if (recipeError) {
+            console.error('Error inserting recipe items:', recipeError);
+          }
+        }
+      }
+
+      alert(editingItem ? 'Item berhasil diperbarui' : 'Item berhasil ditambahkan');
     } catch (error) {
       console.error('Error saving item:', error);
       alert('Gagal menyimpan item');
@@ -260,8 +324,26 @@ export default function MenuPage() {
     fetchData();
   };
 
-  const editItem = (item: MenuItem) => {
+  const editItem = async (item: MenuItem) => {
     setEditingItem(item);
+
+    // Fetch recipe items for this menu item
+    let fetchedRecipes: RecipeItem[] = [];
+    const { data: recipeData } = await supabase
+      .from('menu_item_ingredients')
+      .select('*, inventory(name, unit)')
+      .eq('menu_item_id', item.id);
+
+    if (recipeData) {
+      fetchedRecipes = recipeData.map((r: any) => ({
+        inventory_id: r.inventory_id,
+        inventory_name: r.inventory?.name,
+        inventory_unit: r.inventory?.unit,
+        quantity: r.quantity,
+        unit: r.unit,
+      }));
+    }
+
     setItemForm({
       name: item.name,
       description: item.description || '',
@@ -274,6 +356,7 @@ export default function MenuPage() {
       preparation_time: item.preparation_time?.toString() || '',
       category_id: item.category_id || '',
       tags: item.tags?.join(', ') || '',
+      recipeItems: fetchedRecipes,
     });
     setShowItemModal(true);
   };
@@ -302,7 +385,27 @@ export default function MenuPage() {
       preparation_time: '',
       category_id: categories[0]?.id || '',
       tags: '',
+      recipeItems: [],
     });
+  };
+
+  const handleAddRecipeItem = () => {
+    setItemForm({
+      ...itemForm,
+      recipeItems: [...itemForm.recipeItems, { inventory_id: '', quantity: 0, unit: 'gram' }]
+    });
+  };
+
+  const handleRemoveRecipeItem = (index: number) => {
+    const newRecipes = [...itemForm.recipeItems];
+    newRecipes.splice(index, 1);
+    setItemForm({ ...itemForm, recipeItems: newRecipes });
+  };
+
+  const handleRecipeChange = (index: number, field: keyof RecipeItem, value: string | number) => {
+    const newRecipes = [...itemForm.recipeItems];
+    newRecipes[index] = { ...newRecipes[index], [field]: value };
+    setItemForm({ ...itemForm, recipeItems: newRecipes });
   };
 
   const resetCategoryForm = () => {
@@ -357,11 +460,10 @@ export default function MenuPage() {
                 <div>
                   <h3 className="font-semibold text-gray-900">{category.name}</h3>
                   <p className="text-sm text-gray-500 mt-1">{category.description}</p>
-                  <span className={`inline-block mt-2 px-2 py-1 text-xs rounded-full ${
-                    category.is_active
+                  <span className={`inline-block mt-2 px-2 py-1 text-xs rounded-full ${category.is_active
                       ? 'bg-green-100 text-green-800'
                       : 'bg-gray-100 text-gray-800'
-                  }`}>
+                    }`}>
                     {category.is_active ? 'Aktif' : 'Nonaktif'}
                   </span>
                 </div>
@@ -395,7 +497,7 @@ export default function MenuPage() {
             <h2 className="text-xl font-semibold text-gray-900">Item Menu</h2>
             <p className="text-sm text-gray-600 mt-1">{filteredItems.length} item ditemukan</p>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
             <input
               type="text"
@@ -404,7 +506,7 @@ export default function MenuPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
             />
-            
+
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
@@ -516,11 +618,10 @@ export default function MenuPage() {
                         <div className="flex flex-col gap-2">
                           <button
                             onClick={() => toggleItemAvailability(item)}
-                            className={`px-3 py-1 text-xs rounded-full w-24 ${
-                              item.is_available
+                            className={`px-3 py-1 text-xs rounded-full w-24 ${item.is_available
                                 ? 'bg-green-100 text-green-800 hover:bg-green-200'
                                 : 'bg-red-100 text-red-800 hover:bg-red-200'
-                            }`}
+                              }`}
                           >
                             {item.is_available ? 'Tersedia' : 'Habis'}
                           </button>
@@ -728,6 +829,79 @@ export default function MenuPage() {
                         Featured Item
                       </label>
                     </div>
+                  </div>
+
+                  {/* Recipes / Grammage section */}
+                  <div className="md:col-span-2 pt-4 border-t border-gray-200">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-medium text-gray-900">Resep / Gramasi (Opsional)</h3>
+                      <button
+                        type="button"
+                        onClick={handleAddRecipeItem}
+                        className="text-sm px-3 py-1 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                      >
+                        + Tambah Bahan
+                      </button>
+                    </div>
+                    {itemForm.recipeItems.length === 0 ? (
+                      <p className="text-sm text-gray-500 italic">Belum ada bahan baku yang diatur. Jika Anda mengatur bahan makanan, stok inventory akan otomatis berkurang saat menu ini dipesan.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {itemForm.recipeItems.map((recipe, index) => (
+                          <div key={index} className="flex gap-4 items-end bg-gray-50 p-3 rounded-lg border border-gray-100">
+                            <div className="flex-1">
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Bahan Baku</label>
+                              <select
+                                value={recipe.inventory_id}
+                                onChange={(e) => handleRecipeChange(index, 'inventory_id', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                required
+                              >
+                                <option value="">Pilih Bahan</option>
+                                {inventoryItems.map(inv => (
+                                  <option key={inv.id} value={inv.id}>
+                                    {inv.name} ({inv.category}) - {inv.unit}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="w-24">
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Jumlah</label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={recipe.quantity}
+                                onChange={(e) => handleRecipeChange(index, 'quantity', parseFloat(e.target.value) || 0)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                required
+                              />
+                            </div>
+                            <div className="w-24">
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Satuan</label>
+                              <select
+                                value={recipe.unit}
+                                onChange={(e) => handleRecipeChange(index, 'unit', e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              >
+                                <option value="gram">Gram</option>
+                                <option value="kg">Kg</option>
+                                <option value="ml">Mililiter</option>
+                                <option value="liter">Liter</option>
+                                <option value="pcs">Pcs</option>
+                              </select>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveRecipeItem(index)}
+                              className="mb-1 p-2 text-red-500 hover:bg-red-50 rounded-md"
+                            >
+                              <TrashIcon className="w-5 h-5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
