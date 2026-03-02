@@ -16,6 +16,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: 'Employees', href: '/dashboard/employees', permission: PERMISSIONS.MANAGE_STAFF },
   { label: 'Attendance', href: '/dashboard/attendance', permission: PERMISSIONS.MANAGE_STAFF },
   { label: 'Payroll', href: '/dashboard/payroll', permission: PERMISSIONS.MANAGE_STAFF },
+  { label: 'Roles', href: '/dashboard/roles', permission: PERMISSIONS.MANAGE_STAFF },
   { label: 'Settings', href: '/dashboard/settings', permission: PERMISSIONS.MANAGE_SETTINGS },
   { label: 'Billing', href: '/dashboard/billing', permission: PERMISSIONS.MANAGE_BILLING },
 ];
