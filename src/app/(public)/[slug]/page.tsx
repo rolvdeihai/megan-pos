@@ -6,7 +6,6 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/layout/Navbar';
-import { sendOrderEmail } from '@/lib/email-service';
 
 interface MenuItem {
   id: string;
@@ -290,17 +289,6 @@ export default function PublicOrderPage() {
       setOrderNumber(generatedOrderNumber);
       setOrderData(order); // Save order data
       setOrderSubmitted(true);
-
-      // Send email notification to owner
-      if (restaurant?.email) {
-        await sendOrderEmail({
-          email: restaurant.email,
-          orderNumber: generatedOrderNumber,
-          customerName: customerName || 'Tanpa nama',
-          totalAmount: calculateTotal(),
-          items: cart.map((item) => `${item.name} x${item.quantity}`),
-        });
-      }
 
       // Send notification (simulated)
       sendNotification(order);

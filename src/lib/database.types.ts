@@ -282,39 +282,6 @@ export type Database = {
           },
         ]
       }
-      otps: {
-        Row: {
-          id: string
-          email: string
-          otp: string
-          type: string
-          expires_at: string
-          verified: boolean | null
-          created_at: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          id?: string
-          email: string
-          otp: string
-          type: string
-          expires_at: string
-          verified?: boolean | null
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          id?: string
-          email?: string
-          otp?: string
-          type?: string
-          expires_at?: string
-          verified?: boolean | null
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       orders: {
         Row: {
           completed_at: string | null
