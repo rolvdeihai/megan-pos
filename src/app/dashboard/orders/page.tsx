@@ -228,111 +228,12 @@ export default function OrdersPage() {
     }
   };
 
-  const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
-
   const completeOrder = async (orderId: string) => {
-    if (processingOrderId) return; // Prevent double click
-    
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-
-    setProcessingOrderId(orderId);
-
-    try {
-      const response = await fetch('/api/orders/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId,
-          paymentMethod: 'cash',
-          userId: ownerId,
-        }),
-      });
-
-      const data = await response.json();
-
-      // Create transaction record
-      const { error: transactionError } = await supabase.from('transactions').insert({
-        user_id: user?.id,
-        order_id: orderId,
-        transaction_number: `TRX-${Date.now().toString().slice(-6)}`,
-        type: 'sale',
-        amount: order.total_amount,
-        payment_method: 'cash', // Default fallback if paid via shortcut
-        status: 'completed',
-        notes: `Pembayaran langsung dari dashboard untuk order ${order.order_number}`,
-      });
-
-      if (transactionError) throw transactionError;
-
-      // Deduct inventory (Sistem Gramasi)
-      const { data: orderWithItems } = await supabase
-        .from('orders')
-        .select(`
-          order_items(
-            menu_item_id,
-            quantity
-          )
-        `)
-        .eq('id', orderId)
-        .single();
-
-      if (orderWithItems && orderWithItems.order_items) {
-        for (const item of orderWithItems.order_items) {
-          const { data: recipes } = await supabase
-            .from('menu_item_ingredients')
-            .select('*')
-            .eq('menu_item_id', item.menu_item_id);
-
-          if (recipes && recipes.length > 0) {
-            for (const recipe of recipes) {
-              const totalDeduction = recipe.quantity * (+item.quantity || 1);
-
-              const { data: invItem } = await supabase
-                .from('inventory')
-                .select('current_stock')
-                .eq('id', recipe.inventory_id)
-                .single();
-
-              if (invItem) {
-                const newStock = Math.max(0, invItem.current_stock - totalDeduction);
-                await supabase
-                  .from('inventory')
-                  .update({ current_stock: newStock })
-                  .eq('id', recipe.inventory_id);
-              }
-            }
-          }
-        }
-      }
-
-      // Free the table if dine-in
-      if (order.table_id) {
-        await supabase
-          .from('restaurant_tables')
-          .update({ is_available: true })
-          .eq('id', order.table_id);
-      }
-
-      // If duplicate, just proceed without error
-      if (data.duplicate) {
-        fetchData();
-        setShowInvoiceModal(false);
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Gagal menyelesaikan order');
-      }
-
-      fetchData();
-      setShowInvoiceModal(false);
-    } catch (error: any) {
-      console.error('Error completing order:', error);
-      alert(error.message || 'Gagal menyelesaikan order');
-    } finally {
-      setProcessingOrderId(null);
-    }
+    // This callback is triggered by InvoiceModal after it has already
+    // handled the full payment flow (API call + transaction creation).
+    // Here we just refresh the UI and close the modal.
+    fetchData();
+    setShowInvoiceModal(false);
   };
 
   // Tampilkan loading jika auth masih loading
