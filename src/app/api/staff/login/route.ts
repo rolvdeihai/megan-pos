@@ -37,10 +37,12 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Buat response dengan cookie
+    console.log('[Staff Login] Employee role_id:', employeeData.role_id, 'role:', employeeData.role);
     const permissions = await getEmployeePermissionsForAuth({
       role_id: employeeData.role_id ?? null,
       role: employeeData.role ?? null,
     });
+    console.log('[Staff Login] Permissions fetched:', permissions);
     const roleName =
       (employeeData as { roles?: { name?: string | null } | null }).roles?.name ?? null;
 
@@ -63,6 +65,7 @@ export async function POST(request: NextRequest) {
     });
 
     // 4. Set cookie untuk staff
+    console.log('[Staff Login] Setting cookie for employee:', employeeData.id);
     const authToken = JSON.stringify({
       userId: employeeData.id,
       userType: 'staff',
@@ -81,10 +84,11 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       path: '/',
       maxAge: 60 * 60 * 24 * 7, // 7 hari
-      sameSite: 'strict',
+      sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
     });
 
+    console.log('[Staff Login] Cookie set, returning response');
     return response;
 
   } catch (error: any) {

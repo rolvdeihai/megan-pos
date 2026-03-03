@@ -7,6 +7,8 @@ export const PERMISSIONS = {
   MANAGE_SETTINGS: 'manage_settings',
   VIEW_REPORTS: 'view_reports',
   MANAGE_BILLING: 'manage_billing',
+  MANAGE_ATTENDANCE: 'manage_attendance',
+  MANAGE_PAYROLL: 'manage_payroll',
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -52,6 +54,16 @@ export const PERMISSION_DEFINITIONS = [
     label: 'Kelola Billing',
     description: 'Kelola paket dan tagihan.',
   },
+  {
+    code: PERMISSIONS.MANAGE_ATTENDANCE,
+    label: 'Kelola Absensi',
+    description: 'Catat dan kelola kehadiran karyawan.',
+  },
+  {
+    code: PERMISSIONS.MANAGE_PAYROLL,
+    label: 'Kelola Penggajian',
+    description: 'Buat dan kelola slip gaji karyawan.',
+  },
 ] as const;
 
 export const DEFAULT_PERMISSION_CODES: PermissionCode[] = PERMISSION_DEFINITIONS.map(
@@ -66,6 +78,8 @@ const LEGACY_ROLE_PERMISSIONS: Record<string, PermissionCode[]> = {
     PERMISSIONS.MANAGE_MENU,
     PERMISSIONS.MANAGE_INVENTORY,
     PERMISSIONS.VIEW_REPORTS,
+    PERMISSIONS.MANAGE_ATTENDANCE,
+    PERMISSIONS.MANAGE_PAYROLL,
   ],
   cashier: [
     PERMISSIONS.VIEW_DASHBOARD,
@@ -120,6 +134,8 @@ export const DASHBOARD_ROUTE_PERMISSIONS: Array<{ prefix: string; permission: Pe
   { prefix: '/dashboard/tables', permission: PERMISSIONS.MANAGE_ORDERS },
   { prefix: '/dashboard/transactions', permission: PERMISSIONS.VIEW_REPORTS },
   { prefix: '/dashboard/billing', permission: PERMISSIONS.MANAGE_BILLING },
+  { prefix: '/dashboard/attendance', permission: PERMISSIONS.MANAGE_ATTENDANCE },
+  { prefix: '/dashboard/payroll', permission: PERMISSIONS.MANAGE_PAYROLL },
   { prefix: '/dashboard', permission: PERMISSIONS.VIEW_DASHBOARD },
 ];
 

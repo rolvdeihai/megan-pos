@@ -62,30 +62,11 @@ export default function PayrollPage() {
 
             if (empData) setEmployees(empData);
 
-            // Get payrolls
-            const { data: payrollData } = await supabase
-                .from('payrolls')
-                .select(`
-                    id,
-                    employee_id,
-                    period_start,
-                    period_end,
-                    basic_salary,
-                    deductions,
-                    net_salary,
-                    status,
-                    payment_date,
-                    employee:employees(full_name, employee_code, role)
-                `)
-                .eq('user_id', user.id)
-                .order('period_start', { ascending: false });
-
-            if (payrollData) {
-                const formattedPayrolls = payrollData.map((p: any) => ({
-                    ...p,
-                    employee: p.employee || { full_name: 'Unknown', employee_code: '-', role: '-' }
-                }));
-                setPayrolls(formattedPayrolls);
+            // Get payrolls via API (bypass schema cache issue)
+            const response = await fetch('/api/payrolls', { credentials: 'include' });
+            if (response.ok) {
+                const data = await response.json();
+                setPayrolls(data.payrolls || []);
             }
         } catch (error) {
             console.error('Error fetching payroll data:', error);
@@ -148,20 +129,24 @@ export default function PayrollPage() {
         if (!user?.id || !selectedEmployeeId || !draftCalculations) return;
 
         try {
-            const { error } = await supabase
-                .from('payrolls')
-                .insert({
-                    user_id: user.id,
+            const response = await fetch('/api/payrolls', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
                     employee_id: selectedEmployeeId,
                     period_start: periodStart,
                     period_end: periodEnd,
                     basic_salary: draftCalculations.basicSalary,
                     deductions: draftCalculations.deductions,
-                    net_salary: draftCalculations.netSalary,
-                    status: 'draft'
-                });
+                    net_salary: draftCalculations.netSalary
+                })
+            });
 
-            if (error) throw error;
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to save');
+            }
 
             alert('Draft slip gaji berhasil disimpan.');
             setShowGenerateModal(false);
@@ -237,7 +222,7 @@ export default function PayrollPage() {
                     }}
                     className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
                 >
-                    + Buat Slip Gaji Barun
+                    + Buat Slip Gaji Baru
                 </button>
             </div>
 
