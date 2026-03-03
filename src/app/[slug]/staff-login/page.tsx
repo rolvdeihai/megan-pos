@@ -34,9 +34,11 @@ export default function StaffLoginPage({ params }: PageProps) {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        // Login berhasil, langsung redirect ke dashboard
+        // Login berhasil, tunggu cookie tersimpan lalu redirect
         // Cookie sudah diset oleh API route
-        window.location.href = '/dashboard';
+        await new Promise(resolve => setTimeout(resolve, 100));
+        router.push('/dashboard');
+        router.refresh();
       } else {
         setError(true);
         setPin('');

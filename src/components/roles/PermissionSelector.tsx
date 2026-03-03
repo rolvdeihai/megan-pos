@@ -36,6 +36,10 @@ const PERMISSION_CATEGORIES: Record<string, string[]> = {
   'Karyawan & Role': [
     'manage_staff',
   ],
+  'Absensi & Penggajian': [
+    'manage_attendance',
+    'manage_payroll',
+  ],
   'Pengaturan & Billing': [
     'manage_settings',
     'manage_billing',

@@ -176,61 +176,75 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
 
       const data = await response.json();
 
-      // Deduct inventory (Sistem Gramasi)
-      if (orderDetails && orderDetails.items.length > 0) {
-        for (const item of orderDetails.items) {
-          // get recipe for this menu item
-          const { data: recipes } = await supabase
-            .from('menu_item_ingredients')
-            .select('*')
-            .eq('menu_item_id', item.menu_item_id);
-
-          if (recipes && recipes.length > 0) {
-            for (const recipe of recipes) {
-              const totalDeduction = recipe.quantity * item.quantity;
-
-              // Call RPC or simple update (using select then update for simplicity here, 
-              // but a DB function would be safer for concurrency)
-              const { data: invItem } = await supabase
-                .from('inventory')
-                .select('current_stock')
-                .eq('id', recipe.inventory_id)
-                .single();
-
-              if (invItem) {
-                const newStock = Math.max(0, invItem.current_stock - totalDeduction);
-                await supabase
-                  .from('inventory')
-                  .update({ current_stock: newStock })
-                  .eq('id', recipe.inventory_id);
-              }
-            }
-          }
-        }
-      }
-
-      // Free the table if it's a dine_in order with a table
-      if (orderDetails?.table_id) {
-        await supabase
-          .from('restaurant_tables')
-          .update({ is_available: true })
-          .eq('id', orderDetails.table_id);
-      }
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Gagal memproses pembayaran');
-      }
-
-      // If duplicate, just complete without alert (already processed)
+      // Check if it's a duplicate/already processed - treat as success
       if (data.duplicate) {
+        console.log('Transaction already exists, completing...');
         onComplete();
         return;
       }
 
-      alert('Pembayaran berhasil!');
+      if (!response.ok) {
+        // Check if error is about duplicate transaction
+        if (data.error?.includes('duplicate') || data.error?.includes('unique_transaction_per_order')) {
+          console.log('Duplicate transaction detected, completing...');
+          onComplete();
+          return;
+        }
+        throw new Error(data.error || 'Gagal memproses pembayaran');
+      }
+
+      // Payment successful - now handle inventory and table (best effort, don't block on errors)
+      try {
+        // Deduct inventory (Sistem Gramasi)
+        if (orderDetails && orderDetails.items.length > 0) {
+          for (const item of orderDetails.items) {
+            const { data: recipes } = await supabase
+              .from('menu_item_ingredients')
+              .select('*')
+              .eq('menu_item_id', item.menu_item_id);
+
+            if (recipes && recipes.length > 0) {
+              for (const recipe of recipes) {
+                const totalDeduction = recipe.quantity * item.quantity;
+                const { data: invItem } = await supabase
+                  .from('inventory')
+                  .select('current_stock')
+                  .eq('id', recipe.inventory_id)
+                  .single();
+
+                if (invItem) {
+                  const newStock = Math.max(0, invItem.current_stock - totalDeduction);
+                  await supabase
+                    .from('inventory')
+                    .update({ current_stock: newStock })
+                    .eq('id', recipe.inventory_id);
+                }
+              }
+            }
+          }
+        }
+
+        // Free the table if it's a dine_in order with a table
+        if (orderDetails?.table_id) {
+          await supabase
+            .from('restaurant_tables')
+            .update({ is_available: true })
+            .eq('id', orderDetails.table_id);
+        }
+      } catch (sideEffectError) {
+        // Log error but don't block - payment already successful
+        console.error('Non-critical error during inventory/table update:', sideEffectError);
+      }
+
       onComplete();
     } catch (error: any) {
       console.error('Error processing payment:', error);
+      // Don't show error if it's a duplicate
+      if (error.message?.includes('duplicate') || error.message?.includes('unique_transaction_per_order')) {
+        console.log('Duplicate transaction detected in error, completing...');
+        onComplete();
+        return;
+      }
       alert(error.message || 'Terjadi kesalahan saat memproses pembayaran');
     } finally {
       setIsProcessing(false);
