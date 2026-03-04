@@ -62,12 +62,35 @@ export default function PublicOrdersPage() {
   };
 
   const updateOrderStatus = async (orderId: string, status: string) => {
-    await supabase
-      .from('orders')
-      .update({ status })
-      .eq('id', orderId);
+    // If completing order, also create transaction record
+    if (status === 'completed') {
+      const { data: order } = await supabase
+        .from('orders')
+        .select('user_id, total_amount, order_number, payment_method')
+        .eq('id', orderId)
+        .single();
 
-    // Optimistic update or just refetch
+      if (order) {
+        // Call API to complete order and create transaction
+        await fetch('/api/orders/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId,
+            paymentMethod: order.payment_method || 'cash',
+            userId: order.user_id,
+          }),
+        });
+      }
+    } else {
+      // For other statuses, just update the order status
+      await supabase
+        .from('orders')
+        .update({ status })
+        .eq('id', orderId);
+    }
+
+    // Refresh orders
     fetchOrders();
   };
 

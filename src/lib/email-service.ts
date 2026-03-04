@@ -22,7 +22,7 @@ export async function sendOTPEmail(data: EmailData): Promise<{ success: boolean;
       if (!GAS_URL) {
         console.warn('GAS URL not configured, logging only');
         console.log('OTP Email would be sent:', data);
-        return { success: true, logged: true };
+        return { success: true };
       }
 
       const response = await fetch(GAS_URL, {

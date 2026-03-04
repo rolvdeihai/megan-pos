@@ -41,18 +41,17 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  // Default filter: 30 days ago to today
+  // Default filter: Bulan Ini (tanggal 1 sampai hari ini)
   const [startDate, setStartDate] = useState<Date | null>(() => {
     const date = new Date();
-    date.setDate(1);
+    date.setDate(1); // Tanggal 1 bulan ini
     date.setHours(0, 0, 0, 0);
     return date;
   });
   const [endDate, setEndDate] = useState<Date | null>(() => {
     const date = new Date();
     date.setHours(23, 59, 59, 999);
-    date.setDate(date.getDate() - 30); // 30 days ago
-    return date;
+    return date; // Hari ini
   });
   const [paymentMethod, setPaymentMethod] = useState<string>('all');
   const [transactionType, setTransactionType] = useState<string>('all');

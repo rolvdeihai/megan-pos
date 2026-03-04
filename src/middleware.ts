@@ -47,6 +47,7 @@ export function middleware(request: NextRequest) {
 
   // Check dashboard routes (allow both owner and staff)
   if (pathname.startsWith('/dashboard')) {
+    console.log('[Middleware] Dashboard access. Owner session:', hasValidOwnerSession, 'Staff token exists:', !!staffToken);
     // Jika tidak ada token sama sekali
     if (!hasValidOwnerSession && !staffToken) {
       const loginUrl = new URL('/login', request.url);
@@ -61,20 +62,26 @@ export function middleware(request: NextRequest) {
 
     // Staff permission check
     const requiredPermission = getRequiredPermissionForPath(pathname);
+    console.log('[Middleware] Required permission:', requiredPermission);
     if (!requiredPermission) {
       return withCookieCleanup(NextResponse.next());
     }
 
     try {
       const staffData = parseJsonCookie<{ permissions?: string[]; role?: string }>(staffToken?.value);
-      const hasPermissionsField = Array.isArray(staffData?.permissions);
+      console.log('[Middleware] Staff data parsed:', staffData ? 'success' : 'failed');
+      const hasPermissionsField = Array.isArray(staffData?.permissions) && (staffData?.permissions?.length || 0) > 0;
       const staffPermissions = hasPermissionsField
         ? (staffData?.permissions as string[])
         : getLegacyRolePermissions(staffData?.role);
+      console.log('[Middleware] Using permissions:', hasPermissionsField ? 'from db' : 'legacy role-based');
 
+      console.log('[Middleware] Staff permissions:', staffPermissions);
       if (hasPermission(staffPermissions, requiredPermission)) {
+        console.log('[Middleware] Staff access granted');
         return withCookieCleanup(NextResponse.next());
       }
+      console.log('[Middleware] Staff access denied - insufficient permissions');
     } catch (error) {
       console.error('[Middleware] Failed to parse staff token:', error);
     }

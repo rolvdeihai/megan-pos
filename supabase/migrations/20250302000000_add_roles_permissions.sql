@@ -45,26 +45,14 @@ GRANT ALL ON public.permissions TO anon, authenticated;
 GRANT ALL ON public.roles TO anon, authenticated;
 GRANT ALL ON public.role_permissions TO anon, authenticated;
 
--- 6. Seed default permissions
+-- 6. Seed default permissions (format yang konsisten dengan PERMISSION_DEFINITIONS di aplikasi)
 INSERT INTO public.permissions (code, description) VALUES
-  ('menu.view', 'Melihat menu'),
-  ('menu.create', 'Menambah menu'),
-  ('menu.edit', 'Mengedit menu'),
-  ('menu.delete', 'Menghapus menu'),
-  ('orders.view', 'Melihat order'),
-  ('orders.create', 'Membuat order'),
-  ('orders.edit', 'Mengedit order'),
-  ('orders.delete', 'Menghapus order'),
-  ('orders.process_payment', 'Memproses pembayaran'),
-  ('tables.view', 'Melihat meja'),
-  ('tables.manage', 'Mengelola meja'),
-  ('inventory.view', 'Melihat inventory'),
-  ('inventory.manage', 'Mengelola inventory'),
-  ('reports.view', 'Melihat laporan'),
-  ('employees.view', 'Melihat pegawai'),
-  ('employees.manage', 'Mengelola pegawai'),
-  ('settings.view', 'Melihat pengaturan'),
-  ('settings.manage', 'Mengelola pengaturan'),
-  ('transactions.view', 'Melihat transaksi'),
-  ('transactions.refund', 'Melakukan refund')
+  ('view_dashboard', 'Akses ringkasan dan statistik utama'),
+  ('manage_orders', 'Buat, proses, dan ubah status order'),
+  ('manage_menu', 'Tambah dan ubah menu serta kategori'),
+  ('manage_inventory', 'Atur stok bahan atau barang'),
+  ('manage_staff', 'Tambah, edit, dan atur akses karyawan'),
+  ('manage_settings', 'Ubah pengaturan restoran dan tampilan'),
+  ('view_reports', 'Akses laporan dan data transaksi'),
+  ('manage_billing', 'Kelola paket dan tagihan')
 ON CONFLICT (code) DO NOTHING;
