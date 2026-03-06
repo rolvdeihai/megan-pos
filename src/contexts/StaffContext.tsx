@@ -21,7 +21,7 @@ type StaffMember = {
 interface StaffContextType {
   staff: StaffMember | null;
   loading: boolean;
-  login: (slug: string, pin: string) => Promise<boolean>;
+  login: (slug: string, employeeId: string) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -52,12 +52,12 @@ export function StaffProvider({ children }: { children: ReactNode }) {
     checkCurrentUser();
   }, []);
 
-  const login = async (slug: string, pin: string): Promise<boolean> => {
+  const login = async (slug: string, employeeId: string): Promise<boolean> => {
     try {
       const res = await fetch('/api/staff/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, pin }),
+        body: JSON.stringify({ slug, employeeId }),
       });
 
       const data = await res.json();
@@ -78,7 +78,7 @@ export function StaffProvider({ children }: { children: ReactNode }) {
     // Hapus staff cookie
     await fetch('/api/staff/logout', { method: 'POST' });
     setStaff(null);
-    
+
     // Redirect ke halaman utama restaurant
     if (staff?.restaurant_slug) {
       window.location.href = `/${staff.restaurant_slug}`;

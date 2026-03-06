@@ -33,6 +33,7 @@ interface OrderModalProps {
     service_charge_percentage?: number;
     delivery_fee?: number;
     enable_delivery?: boolean;
+    [key: string]: any;
   };
   onSubmit: (orderData: any) => void;
   onClose: () => void;

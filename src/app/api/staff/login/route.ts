@@ -4,7 +4,7 @@ import { getEmployeePermissionsForAuth } from '@/lib/rbac-server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { slug, pin } = await request.json();
+    const { slug, employeeId } = await request.json();
 
     // 1. Cari user berdasarkan restaurant_slug
     const { data: userData, error: userError } = await supabase
@@ -20,18 +20,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Cari employee berdasarkan user_id dan PIN
+    // 2. Cari employee berdasarkan user_id dan employeeId (tanpa PIN)
     const { data: employeeData, error: employeeError } = await supabase
       .from('employees')
       .select('id, full_name, role, role_id, email, user_id, roles(name)')
       .eq('user_id', userData.id)
-      .eq('pin_code', pin)
+      .eq('id', employeeId)
       .eq('is_active', true)
       .single();
 
     if (employeeError || !employeeData) {
       return NextResponse.json(
-        { error: 'PIN salah atau karyawan tidak aktif' },
+        { error: 'Karyawan tidak ditemukan atau tidak aktif' },
         { status: 401 }
       );
     }

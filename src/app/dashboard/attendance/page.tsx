@@ -32,9 +32,7 @@ export default function AttendancePage() {
 
     // Clock in/out states
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-    const [pin, setPin] = useState('');
     const [actionType, setActionType] = useState<'in' | 'out'>('in');
-    const [showPinModal, setShowPinModal] = useState(false);
 
     useEffect(() => {
         if (user?.id) {
@@ -92,39 +90,16 @@ export default function AttendancePage() {
     };
 
     const handleClockAction = (employee: Employee, type: 'in' | 'out') => {
-        setSelectedEmployee(employee);
-        setActionType(type);
-        setPin('');
-        setShowPinModal(true);
+        submitClockAction(employee, type);
     };
 
-    const submitClockAction = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!user?.id || !selectedEmployee) return;
-
-        // GUARD: PIN must be exactly 4 digits
-        if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-            alert('PIN harus 4 digit angka. Silakan masukkan PIN yang valid.');
-            return;
-        }
+    const submitClockAction = async (employee: Employee, type: 'in' | 'out') => {
+        if (!user?.id || !employee) return;
 
         try {
-            // 1. Verify PIN
-            const { data: empData, error: empError } = await supabase
-                .from('employees')
-                .select('pin_code')
-                .eq('id', selectedEmployee.id)
-                .single();
-
-            if (empError || !empData?.pin_code || empData.pin_code !== pin) {
-                alert('PIN salah. Silakan coba lagi.');
-                setPin(''); // Clear PIN on error
-                return;
-            }
-
             const now = new Date().toISOString();
 
-            if (actionType === 'in') {
+            if (type === 'in') {
                 // Check if already clocked in today without clock out
                 const startOfDay = new Date();
                 startOfDay.setHours(0, 0, 0, 0);
@@ -132,14 +107,13 @@ export default function AttendancePage() {
                 const { data: existingLog } = await supabase
                     .from('attendance_logs')
                     .select('id')
-                    .eq('employee_id', selectedEmployee.id)
+                    .eq('employee_id', employee.id)
                     .gte('clock_in', startOfDay.toISOString())
                     .is('clock_out', null)
                     .single();
 
                 if (existingLog) {
                     alert('Karyawan ini sudah clock-in dan belum clock-out.');
-                    setShowPinModal(false);
                     return;
                 }
 
@@ -147,7 +121,7 @@ export default function AttendancePage() {
                 const { error } = await supabase
                     .from('attendance_logs')
                     .insert({
-                        employee_id: selectedEmployee.id,
+                        employee_id: employee.id,
                         user_id: user.id,
                         clock_in: now,
                         status: 'present'
@@ -165,7 +139,7 @@ export default function AttendancePage() {
                 const { data: existingLog } = await supabase
                     .from('attendance_logs')
                     .select('id')
-                    .eq('employee_id', selectedEmployee.id)
+                    .eq('employee_id', employee.id)
                     .gte('clock_in', startOfDay.toISOString())
                     .is('clock_out', null)
                     .order('clock_in', { ascending: false })
@@ -174,7 +148,6 @@ export default function AttendancePage() {
 
                 if (!existingLog) {
                     alert('Tidak ditemukan data Clock-In aktif untuk hari ini.');
-                    setShowPinModal(false);
                     return;
                 }
 
@@ -187,9 +160,6 @@ export default function AttendancePage() {
                 alert('Berhasil Clock-Out!');
             }
 
-            setShowPinModal(false);
-            setPin('');
-            setSelectedEmployee(null);
             fetchData();
 
         } catch (error) {
@@ -312,64 +282,6 @@ export default function AttendancePage() {
                     )}
                 </div>
             </div>
-
-            {/* PIN Verification Modal */}
-            {showPinModal && selectedEmployee && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">
-                        <h3 className="text-xl font-bold text-center mb-2">
-                            {actionType === 'in' ? 'Clock In' : 'Clock Out'}
-                        </h3>
-                        <p className="text-center text-gray-600 mb-6 font-medium">
-                            {selectedEmployee.full_name}
-                        </p>
-
-                        <form onSubmit={submitClockAction}>
-                            <div className="mb-6">
-                                <label className="block text-sm font-medium text-gray-700 mb-2 text-center">
-                                    Masukkan 4 Digit PIN
-                                </label>
-                                <input
-                                    type="password"
-                                    autoFocus
-                                    maxLength={4}
-                                    pattern="\d{4}"
-                                    inputMode="numeric"
-                                    required
-                                    value={pin}
-                                    onChange={(e) => {
-                                        // Only allow numeric input
-                                        const value = e.target.value.replace(/\D/g, '');
-                                        if (value.length <= 4) setPin(value);
-                                    }}
-                                    className="w-full text-center text-3xl tracking-[1em] px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/50 focus:border-primary"
-                                />
-                            </div>
-
-                            <div className="flex space-x-3">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowPinModal(false);
-                                        setPin('');
-                                    }}
-                                    className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={pin.length !== 4 || !/^\d{4}$/.test(pin)}
-                                    className="flex-1 px-4 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50"
-                                >
-                                    Konfirmasi
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )
-            }
-        </div >
+        </div>
     );
 }

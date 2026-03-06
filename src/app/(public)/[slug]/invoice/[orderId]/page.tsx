@@ -26,6 +26,9 @@ type InvoiceData = {
   subtotal: number;
   tax_percentage: number | null;
   tax_amount: number | null;
+  service_charge_percentage: number | null;
+  service_charge_amount: number | null;
+  delivery_fee: number | null;
   discount_percentage: number | null;
   discount_amount: number | null;
   total_amount: number;
@@ -107,6 +110,9 @@ export default function PublicInvoicePage() {
           subtotal,
           tax_percentage,
           tax_amount,
+          service_charge_percentage,
+          service_charge_amount,
+          delivery_fee,
           discount_percentage,
           discount_amount,
           total_amount,
@@ -144,7 +150,7 @@ export default function PublicInvoicePage() {
 
       // Recalculate subtotal from items if order subtotal is 0 or invalid
       const itemsSubtotal = normalizedItems.reduce((sum, item) => sum + item.total_price, 0);
-      
+
       const tableRelation: any = orderData.restaurant_tables;
       const tableNumber = Array.isArray(tableRelation)
         ? tableRelation[0]?.table_number
@@ -153,13 +159,18 @@ export default function PublicInvoicePage() {
       const subtotal = Number(orderData.subtotal) || itemsSubtotal || 0;
       const taxPercentage = Number(orderData.tax_percentage) || 0;
       const taxAmount = Number(orderData.tax_amount) || (subtotal * (taxPercentage / 100));
+      const serviceChargePercentage = Number(orderData.service_charge_percentage) || 0;
+      const serviceChargeAmount = Number(orderData.service_charge_amount) || (subtotal * (serviceChargePercentage / 100));
+      const deliveryFee = Number(orderData.delivery_fee) || 0;
       const discountAmount = Number(orderData.discount_amount) || 0;
-      const totalAmount = Number(orderData.total_amount) || (subtotal + taxAmount - discountAmount);
+      const totalAmount = Number(orderData.total_amount) || (subtotal + taxAmount + serviceChargeAmount + deliveryFee - discountAmount);
 
       setInvoice({
         ...orderData,
         subtotal,
         tax_amount: taxAmount,
+        service_charge_amount: serviceChargeAmount,
+        delivery_fee: deliveryFee,
         discount_amount: discountAmount,
         total_amount: totalAmount,
         table_number: tableNumber || null,
@@ -283,6 +294,18 @@ export default function PublicInvoicePage() {
                   <span className="text-gray-600">Pajak ({invoice.tax_percentage || 0}%)</span>
                   <span>{formatMoney(invoice.tax_amount || 0)}</span>
                 </div>
+                {(invoice.service_charge_amount || 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Service Charge ({invoice.service_charge_percentage || 0}%)</span>
+                    <span>{formatMoney(invoice.service_charge_amount || 0)}</span>
+                  </div>
+                )}
+                {(invoice.delivery_fee || 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Biaya Pengiriman</span>
+                    <span>{formatMoney(invoice.delivery_fee || 0)}</span>
+                  </div>
+                )}
                 {(invoice.discount_amount || 0) > 0 && (
                   <div className="flex justify-between text-red-600">
                     <span>Diskon ({invoice.discount_percentage || 0}%)</span>
