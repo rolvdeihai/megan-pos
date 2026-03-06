@@ -24,6 +24,8 @@ interface OrderDetails {
   subtotal: number;
   tax_percentage: number;
   tax_amount: number;
+  service_charge_percentage: number;
+  service_charge_amount: number;
   discount_percentage: number;
   discount_amount: number;
   total_amount: number;
@@ -420,6 +422,12 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
                   <span>Pajak ({orderDetails.tax_percentage}%)</span>
                   <span>Rp {orderDetails.tax_amount.toLocaleString()}</span>
                 </div>
+                {orderDetails.service_charge_amount > 0 && (
+                  <div className="flex justify-between">
+                    <span>Service Charge ({orderDetails.service_charge_percentage}%)</span>
+                    <span>Rp {orderDetails.service_charge_amount.toLocaleString()}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-lg font-bold pt-3 border-t">
                   <span>Total</span>
                   <span>Rp {orderDetails.total_amount.toLocaleString()}</span>
