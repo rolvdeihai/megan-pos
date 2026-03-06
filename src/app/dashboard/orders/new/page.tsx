@@ -15,7 +15,9 @@ export default function NewOrderPage() {
   const [tables, setTables] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Gunakan useAuth yang sudah ada
   const { user } = useAuth();
@@ -59,11 +61,24 @@ export default function NewOrderPage() {
       .order('display_order');
 
     setCategories(catData || []);
+
+    // Fetch settings
+    const { data: settingsData } = await supabase
+      .from('restaurant_settings')
+      .select('*')
+      .eq('user_id', ownerId)
+      .single();
+
+    setSettings(settingsData || { tax_percentage: 10, service_charge_percentage: 0 });
     setLoading(false);
   };
 
   const handleCreateOrder = async (orderData: any) => {
     if (!ownerId || !user) return;
+    
+    // Prevent duplicate submission
+    if (isSubmitting) return;
+    setIsSubmitting(true);
 
     // --- ENFORCE TRANSACTION LIMIT ---
     let tier = user.subscription_tier || 'basic';
@@ -90,15 +105,26 @@ export default function NewOrderPage() {
 
     const { items, ...orderFields } = orderData;
 
-    // Generate order number
-    const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
+    // Generate unique order number with random suffix to prevent collisions
+    const orderNumber = `ORD-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
 
     const subtotal = items.reduce((sum: number, item: any) =>
       sum + (item.price * item.quantity), 0);
 
-    const taxPercentage = 10; // Default tax
+    // Fetch tax, service charge, and delivery fee from restaurant settings
+    const { data: settings } = await supabase
+      .from('restaurant_settings')
+      .select('tax_percentage, service_charge_percentage, delivery_fee')
+      .eq('user_id', ownerId)
+      .single();
+
+    const taxPercentage = settings?.tax_percentage ?? 10;
+    const serviceChargePercentage = settings?.service_charge_percentage ?? 0;
+    const deliveryFee = orderFields.order_type === 'delivery' ? (settings?.delivery_fee ?? 0) : 0;
+    
     const taxAmount = subtotal * (taxPercentage / 100);
-    const totalAmount = subtotal + taxAmount;
+    const serviceChargeAmount = subtotal * (serviceChargePercentage / 100);
+    const totalAmount = subtotal + taxAmount + serviceChargeAmount + deliveryFee;
 
     const { data, error } = await supabase
       .from('orders')
@@ -110,6 +136,9 @@ export default function NewOrderPage() {
         subtotal: subtotal,
         tax_percentage: taxPercentage,
         tax_amount: taxAmount,
+        service_charge_percentage: serviceChargePercentage,
+        service_charge_amount: serviceChargeAmount,
+        delivery_fee: deliveryFee,
         discount_percentage: 0,
         discount_amount: 0,
         total_amount: totalAmount,
@@ -154,6 +183,7 @@ export default function NewOrderPage() {
     } else {
       console.error('Error creating order:', error);
       alert('Gagal membuat order: ' + (error?.message || 'Unknown error'));
+      setIsSubmitting(false);
     }
   };
 
@@ -179,8 +209,10 @@ export default function NewOrderPage() {
         tables={tables}
         menuItems={menuItems}
         categories={categories}
+        settings={settings}
         onSubmit={handleCreateOrder}
         onClose={() => router.push('/dashboard/orders')}
+        isSubmitting={isSubmitting}
       />
     </div>
   );

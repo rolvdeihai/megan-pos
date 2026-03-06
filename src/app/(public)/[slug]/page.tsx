@@ -237,6 +237,15 @@ export default function PublicOrderPage() {
       // Generate order number
       const generatedOrderNumber = `ORD-${Date.now().toString().slice(-6)}`;
 
+      const subtotal = calculateSubtotal();
+      const taxPercentage = settings?.tax_percentage || 10;
+      const serviceChargePercentage = settings?.service_charge_percentage || 0;
+      const deliveryFee = orderType === 'delivery' ? (settings?.delivery_fee || 0) : 0;
+      
+      const taxAmount = subtotal * (taxPercentage / 100);
+      const serviceChargeAmount = subtotal * (serviceChargePercentage / 100);
+      const totalAmount = subtotal + taxAmount + serviceChargeAmount + deliveryFee;
+
       const orderData = {
         user_id: restaurant.id,
         order_number: generatedOrderNumber,
@@ -246,10 +255,12 @@ export default function PublicOrderPage() {
         customer_phone: customerPhone,
         delivery_address: orderType === 'delivery' ? deliveryAddress : null,
         status: 'pending',
-        subtotal: calculateSubtotal(),
-        tax_percentage: settings?.tax_percentage || 10,
-        tax_amount: calculateSubtotal() * ((settings?.tax_percentage || 10) / 100),
-        total_amount: calculateTotal(),
+        subtotal: subtotal,
+        tax_percentage: taxPercentage,
+        tax_amount: taxAmount,
+        service_charge_percentage: serviceChargePercentage,
+        service_charge_amount: serviceChargeAmount,
+        total_amount: totalAmount,
         payment_status: 'pending',
         notes,
       };
@@ -393,7 +404,7 @@ export default function PublicOrderPage() {
                 <div>
                   <div className="text-sm text-gray-500">Total</div>
                   <div className="font-medium">
-                    Rp {calculateTotal().toLocaleString()}
+                    Rp {(orderData?.total_amount || 0).toLocaleString()}
                   </div>
                 </div>
               </div>

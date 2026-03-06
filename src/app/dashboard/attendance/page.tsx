@@ -102,6 +102,12 @@ export default function AttendancePage() {
         e.preventDefault();
         if (!user?.id || !selectedEmployee) return;
 
+        // GUARD: PIN must be exactly 4 digits
+        if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+            alert('PIN harus 4 digit angka. Silakan masukkan PIN yang valid.');
+            return;
+        }
+
         try {
             // 1. Verify PIN
             const { data: empData, error: empError } = await supabase
@@ -110,8 +116,9 @@ export default function AttendancePage() {
                 .eq('id', selectedEmployee.id)
                 .single();
 
-            if (empError || empData?.pin_code !== pin) {
+            if (empError || !empData?.pin_code || empData.pin_code !== pin) {
                 alert('PIN salah. Silakan coba lagi.');
+                setPin(''); // Clear PIN on error
                 return;
             }
 
@@ -327,9 +334,14 @@ export default function AttendancePage() {
                                     autoFocus
                                     maxLength={4}
                                     pattern="\d{4}"
+                                    inputMode="numeric"
                                     required
                                     value={pin}
-                                    onChange={(e) => setPin(e.target.value)}
+                                    onChange={(e) => {
+                                        // Only allow numeric input
+                                        const value = e.target.value.replace(/\D/g, '');
+                                        if (value.length <= 4) setPin(value);
+                                    }}
                                     className="w-full text-center text-3xl tracking-[1em] px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/50 focus:border-primary"
                                 />
                             </div>
@@ -347,7 +359,7 @@ export default function AttendancePage() {
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={pin.length !== 4}
+                                    disabled={pin.length !== 4 || !/^\d{4}$/.test(pin)}
                                     className="flex-1 px-4 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50"
                                 >
                                     Konfirmasi
