@@ -15,6 +15,7 @@ export default function NewOrderPage() {
   const [tables, setTables] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Gunakan useAuth yang sudah ada
@@ -59,6 +60,16 @@ export default function NewOrderPage() {
       .order('display_order');
 
     setCategories(catData || []);
+
+    // Fetch settings
+    const { data: settingsData } = await supabase
+      .from('restaurant_settings')
+      .select('*')
+      .eq('user_id', ownerId)
+      .single();
+
+    setSettings(settingsData || null);
+
     setLoading(false);
   };
 
@@ -96,9 +107,13 @@ export default function NewOrderPage() {
     const subtotal = items.reduce((sum: number, item: any) =>
       sum + (item.price * item.quantity), 0);
 
-    const taxPercentage = 10; // Default tax
+    const taxPercentage = settings?.tax_percentage || 0;
     const taxAmount = subtotal * (taxPercentage / 100);
-    const totalAmount = subtotal + taxAmount;
+    const serviceChargePercentage = settings?.service_charge_percentage || 0;
+    const serviceChargeAmount = subtotal * (serviceChargePercentage / 100);
+    const deliveryFee = orderFields.order_type === 'delivery' ? (settings?.delivery_fee || 0) : 0;
+
+    const totalAmount = subtotal + taxAmount + serviceChargeAmount + deliveryFee;
 
     const { data, error } = await supabase
       .from('orders')
@@ -110,6 +125,9 @@ export default function NewOrderPage() {
         subtotal: subtotal,
         tax_percentage: taxPercentage,
         tax_amount: taxAmount,
+        service_charge_percentage: serviceChargePercentage,
+        service_charge_amount: serviceChargeAmount,
+        delivery_fee: deliveryFee,
         discount_percentage: 0,
         discount_amount: 0,
         total_amount: totalAmount,
@@ -179,6 +197,7 @@ export default function NewOrderPage() {
         tables={tables}
         menuItems={menuItems}
         categories={categories}
+        settings={settings}
         onSubmit={handleCreateOrder}
         onClose={() => router.push('/dashboard/orders')}
       />
