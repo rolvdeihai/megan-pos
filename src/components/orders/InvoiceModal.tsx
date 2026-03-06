@@ -26,6 +26,7 @@ interface OrderDetails {
   tax_amount: number;
   service_charge_percentage: number;
   service_charge_amount: number;
+  delivery_fee: number;
   discount_percentage: number;
   discount_amount: number;
   total_amount: number;
@@ -144,7 +145,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
 
   const handlePayment = async () => {
     if (isProcessing) return; // Prevent double click
-    
+
     if (!paymentMethod) {
       alert('Pilih metode pembayaran terlebih dahulu');
       return;
@@ -160,7 +161,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
     try {
       // Get user_id from orderDetails (fetchOrderDetails now includes it)
       const userId = orderDetails?.user_id;
-      
+
       if (!userId) {
         throw new Error('User ID not found');
       }
@@ -426,6 +427,12 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
                   <div className="flex justify-between">
                     <span>Service Charge ({orderDetails.service_charge_percentage}%)</span>
                     <span>Rp {orderDetails.service_charge_amount.toLocaleString()}</span>
+                  </div>
+                )}
+                {orderDetails.delivery_fee > 0 && (
+                  <div className="flex justify-between">
+                    <span>Biaya Pengiriman</span>
+                    <span>Rp {orderDetails.delivery_fee.toLocaleString()}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-lg font-bold pt-3 border-t">

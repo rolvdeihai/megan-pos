@@ -241,7 +241,7 @@ export default function PublicOrderPage() {
       const taxPercentage = settings?.tax_percentage || 10;
       const serviceChargePercentage = settings?.service_charge_percentage || 0;
       const deliveryFee = orderType === 'delivery' ? (settings?.delivery_fee || 0) : 0;
-      
+
       const taxAmount = subtotal * (taxPercentage / 100);
       const serviceChargeAmount = subtotal * (serviceChargePercentage / 100);
       const totalAmount = subtotal + taxAmount + serviceChargeAmount + deliveryFee;
@@ -260,6 +260,7 @@ export default function PublicOrderPage() {
         tax_amount: taxAmount,
         service_charge_percentage: serviceChargePercentage,
         service_charge_amount: serviceChargeAmount,
+        delivery_fee: deliveryFee,
         total_amount: totalAmount,
         payment_status: 'pending',
         notes,
@@ -409,25 +410,25 @@ export default function PublicOrderPage() {
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="space-y-4">
-              <p className="text-gray-600">
-                Kami akan mengirimkan notifikasi via WhatsApp jika nomor telepon Anda terdaftar.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <button
-                  onClick={() => router.push(`/${slug}`)}
-                  className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium"
-                >
-                  Kembali ke Menu
-                </button>
-                <button
-                  onClick={() => router.push(`/${slug}/invoice/${orderData.id}`)}
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
-                >
-                  Cetak Invoice
-                </button>
-              </div>
+          <div className="space-y-4">
+            <p className="text-gray-600">
+              Kami akan mengirimkan notifikasi via WhatsApp jika nomor telepon Anda terdaftar.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button
+                onClick={() => router.push(`/${slug}`)}
+                className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium"
+              >
+                Kembali ke Menu
+              </button>
+              <button
+                onClick={() => router.push(`/${slug}/invoice/${orderData.id}`)}
+                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                Cetak Invoice
+              </button>
             </div>
           </div>
         </div>
@@ -484,8 +485,8 @@ export default function PublicOrderPage() {
                       type="button"
                       onClick={() => setOrderType('dine_in')}
                       className={`p-4 rounded-lg border-2 flex flex-col items-center justify-center ${orderType === 'dine_in'
-                          ? 'border-primary bg-primary/10'
-                          : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-gray-200 hover:border-gray-300'
                         }`}
                     >
                       <div className="text-2xl mb-2">🍽️</div>

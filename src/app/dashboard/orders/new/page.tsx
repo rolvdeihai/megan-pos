@@ -75,7 +75,7 @@ export default function NewOrderPage() {
 
   const handleCreateOrder = async (orderData: any) => {
     if (!ownerId || !user) return;
-    
+
     // Prevent duplicate submission
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -111,19 +111,12 @@ export default function NewOrderPage() {
     const subtotal = items.reduce((sum: number, item: any) =>
       sum + (item.price * item.quantity), 0);
 
-    // Fetch tax, service charge, and delivery fee from restaurant settings
-    const { data: settings } = await supabase
-      .from('restaurant_settings')
-      .select('tax_percentage, service_charge_percentage, delivery_fee')
-      .eq('user_id', ownerId)
-      .single();
-
     const taxPercentage = settings?.tax_percentage ?? 10;
-    const serviceChargePercentage = settings?.service_charge_percentage ?? 0;
-    const deliveryFee = orderFields.order_type === 'delivery' ? (settings?.delivery_fee ?? 0) : 0;
-    
     const taxAmount = subtotal * (taxPercentage / 100);
+    const serviceChargePercentage = settings?.service_charge_percentage ?? 0;
     const serviceChargeAmount = subtotal * (serviceChargePercentage / 100);
+    const deliveryFee = orderFields.order_type === 'delivery' ? (settings?.delivery_fee ?? 0) : 0;
+
     const totalAmount = subtotal + taxAmount + serviceChargeAmount + deliveryFee;
 
     const { data, error } = await supabase
