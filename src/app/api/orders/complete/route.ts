@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update order status
+    // Update order status and free table in a single batch
     const { error: updateError } = await supabaseAdmin
       .from('orders')
       .update({
@@ -58,13 +58,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Free the table IMMEDIATELY if dine-in (before creating transaction)
+    // This ensures table is available even if transaction creation fails
+    if (order.table_id) {
+      const { error: tableError } = await supabaseAdmin
+        .from('restaurant_tables')
+        .update({ is_available: true })
+        .eq('id', order.table_id);
+      
+      if (tableError) {
+        console.error('Error freeing table:', tableError);
+        // Don't fail the request, but log the error
+      }
+    }
+
     // Create transaction record
     const { error: transactionError } = await supabaseAdmin
       .from('transactions')
       .insert({
         user_id: userId,
         order_id: orderId,
-        transaction_number: `TRX-${Date.now().toString().slice(-6)}`,
+        transaction_number: `TRX-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`,
         type: 'sale',
         amount: order.total_amount || 0,
         payment_method: paymentMethod || 'cash',
@@ -85,14 +99,6 @@ export async function POST(request: NextRequest) {
         { error: transactionError.message },
         { status: 500 }
       );
-    }
-
-    // Free the table if dine-in
-    if (order.table_id) {
-      await supabaseAdmin
-        .from('restaurant_tables')
-        .update({ is_available: true })
-        .eq('id', order.table_id);
     }
 
     return NextResponse.json({

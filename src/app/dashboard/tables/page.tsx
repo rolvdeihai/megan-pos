@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { PlusIcon, PencilIcon, TrashIcon, QrCodeIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, QrCodeIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import QRCode from 'react-qr-code';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { getOwnerId } from '@/lib/user-scope';
@@ -16,6 +16,15 @@ type Table = {
   qr_code: string;
 };
 
+type OrderInfo = {
+  id: string;
+  order_number: string;
+  status: string;
+  customer_name: string;
+  total_amount: number;
+  created_at: string;
+};
+
 export default function TablesPage() {
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,6 +36,12 @@ export default function TablesPage() {
     table_name: '',
     capacity: 4,
   });
+
+  // Delete confirmation modal states
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingTable, setDeletingTable] = useState<Table | null>(null);
+  const [relatedOrders, setRelatedOrders] = useState<OrderInfo[]>([]);
+  const [checkingOrders, setCheckingOrders] = useState(false);
 
   const { user } = useAuth();
   const ownerId = getOwnerId(user);
@@ -113,24 +128,92 @@ export default function TablesPage() {
     setShowForm(true);
   };
 
-  const deleteTable = async (id: string) => {
+  // Check if table has related orders before showing delete modal
+  const initiateDelete = async (table: Table) => {
     if (!ownerId) return;
     
-    if (confirm('Apakah Anda yakin ingin menghapus meja ini?')) {
-      const { error } = await supabase
-        .from('restaurant_tables')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', ownerId);
+    setDeletingTable(table);
+    setCheckingOrders(true);
+    setShowDeleteModal(true);
 
-      if (!error) {
-        fetchTables();
-      } else {
-        console.error('Error deleting table:', error);
-        alert('Terjadi kesalahan saat menghapus meja');
-      }
+    // Fetch related orders
+    const { data: orders } = await supabase
+      .from('orders')
+      .select('id, order_number, status, customer_name, total_amount, created_at')
+      .eq('table_id', table.id)
+      .eq('user_id', ownerId)
+      .order('created_at', { ascending: false });
+
+    setRelatedOrders(orders || []);
+    setCheckingOrders(false);
+  };
+
+  // Simple delete for tables without orders
+  const deleteTableSimple = async (id: string) => {
+    if (!ownerId) return;
+    
+    const { error } = await supabase
+      .from('restaurant_tables')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', ownerId);
+
+    if (!error) {
+      fetchTables();
+      setShowDeleteModal(false);
+      setDeletingTable(null);
+      setRelatedOrders([]);
+    } else {
+      console.error('Error deleting table:', error);
+      alert('Terjadi kesalahan saat menghapus meja: ' + (error.message || 'Unknown error'));
     }
   };
+
+  // Force delete: set order table_id to null then delete table
+  const forceDeleteTable = async () => {
+    if (!ownerId || !deletingTable) return;
+
+    const confirmed = confirm(
+      'PERINGATAN: Tindakan ini akan menghapus meja dan melepaskan semua order yang terkait.\n' +
+      'Order yang ada tidak akan dihapus, hanya tidak lagi terkait dengan meja ini.\n\n' +
+      'Lanjutkan?'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      // Step 1: Set table_id to null for all related orders
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({ table_id: null })
+        .eq('table_id', deletingTable.id)
+        .eq('user_id', ownerId);
+
+      if (updateError) throw updateError;
+
+      // Step 2: Delete the table
+      const { error: deleteError } = await supabase
+        .from('restaurant_tables')
+        .delete()
+        .eq('id', deletingTable.id)
+        .eq('user_id', ownerId);
+
+      if (deleteError) throw deleteError;
+
+      fetchTables();
+      setShowDeleteModal(false);
+      setDeletingTable(null);
+      setRelatedOrders([]);
+      alert('Meja berhasil dihapus. Order terkait telah dilepaskan.');
+    } catch (error: any) {
+      console.error('Error force deleting table:', error);
+      alert('Gagal menghapus meja: ' + (error.message || 'Unknown error'));
+    }
+  };
+
+  // Note: Opsi "Hapus Semua Order & Meja" dihapus karena order yang sudah complete
+  // memiliki transaksi di tabel transactions. Menghapus data historis transaksi
+  // sangat berbahaya untuk laporan keuangan. Gunakan opsi "Lepaskan Order" saja.
 
   const toggleAvailability = async (table: Table) => {
     if (!ownerId) return;
@@ -406,7 +489,7 @@ export default function TablesPage() {
                     </button>
                   )}
                   <button
-                    onClick={() => deleteTable(table.id)}
+                    onClick={() => initiateDelete(table)}
                     className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
                     title="Hapus"
                   >
@@ -473,6 +556,156 @@ export default function TablesPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && deletingTable && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center space-x-3 mb-4">
+              <ExclamationTriangleIcon className="w-8 h-8 text-yellow-500" />
+              <h2 className="text-xl font-bold text-gray-900">Konfirmasi Hapus Meja</h2>
+            </div>
+
+            <p className="text-gray-600 mb-4">
+              Meja: <span className="font-semibold">{deletingTable.table_name || `Meja ${deletingTable.table_number}`}</span>
+            </p>
+
+            {checkingOrders ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                <p className="mt-2 text-gray-600">Memeriksa order terkait...</p>
+              </div>
+            ) : relatedOrders.length > 0 ? (
+              <div className="space-y-4">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <p className="text-yellow-800 text-sm">
+                    Meja ini masih digunakan oleh <strong>{relatedOrders.length} order</strong>.
+                  </p>
+                </div>
+
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Order</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Status</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {relatedOrders.slice(0, 5).map((order) => (
+                        <tr key={order.id} className="text-sm">
+                          <td className="px-4 py-2">
+                            <div className="font-medium">{order.order_number}</div>
+                            <div className="text-xs text-gray-500">{order.customer_name || 'Tanpa nama'}</div>
+                          </td>
+                          <td className="px-4 py-2">
+                            <span className={`px-2 py-1 text-xs rounded-full ${
+                              order.status === 'completed' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {order.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2">
+                            Rp {order.total_amount.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {relatedOrders.length > 5 && (
+                    <p className="text-xs text-gray-500 text-center py-2">
+                      ...dan {relatedOrders.length - 5} order lainnya
+                    </p>
+                  )}
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                  <p className="text-blue-800 text-sm">
+                    💡 <strong>Informasi:</strong> Order yang sudah selesai memiliki data transaksi/keuangan yang tidak bisa dihapus untuk menjaga integritas laporan.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-700">Pilihan tindakan:</p>
+                  
+                  {/* Option 1: Archive table (set inactive) */}
+                  <button
+                    onClick={() => {
+                      toggleAvailability(deletingTable);
+                      setShowDeleteModal(false);
+                      setDeletingTable(null);
+                      setRelatedOrders([]);
+                      alert('Meja ditandai sebagai tidak tersedia. Meja tidak dihapus dan order tetap terkait.');
+                    }}
+                    className="w-full text-left p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="font-medium text-gray-900">🚫 Tandai Tidak Tersedia</div>
+                    <div className="text-sm text-gray-600">Meja tetap ada tapi tidak bisa dipakai untuk order baru</div>
+                  </button>
+
+                  {/* Option 2: Force delete (unlink orders) - RECOMMENDED */}
+                  <button
+                    onClick={forceDeleteTable}
+                    className="w-full text-left p-3 border-2 rounded-lg hover:bg-orange-50 border-orange-300 bg-orange-50/50 transition-colors"
+                  >
+                    <div className="font-medium text-orange-800">✅ Lepaskan Order & Hapus Meja (Direkomendasikan)</div>
+                    <div className="text-sm text-gray-600">Order dan transaksi tetap tersimpan, hanya tidak lagi terkait dengan meja ini</div>
+                  </button>
+
+                  {/* Option 3: Go to orders page */}
+                  <button
+                    onClick={() => {
+                      window.location.href = '/dashboard/orders';
+                    }}
+                    className="w-full text-left p-3 border rounded-lg hover:bg-blue-50 border-blue-200 transition-colors"
+                  >
+                    <div className="font-medium text-blue-700">📋 Kelola Order Terlebih Dahulu</div>
+                    <div className="text-sm text-gray-600">Buka halaman order untuk selesaikan atau hapus order aktif</div>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-gray-600 mb-4">
+                  Meja ini tidak memiliki order terkait. Yakin ingin menghapus?
+                </p>
+                <div className="flex space-x-3 justify-center">
+                  <button
+                    onClick={() => setShowDeleteModal(false)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={() => deleteTableSimple(deletingTable.id)}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  >
+                    Ya, Hapus Meja
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {relatedOrders.length > 0 && (
+              <div className="mt-4 pt-4 border-t">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setDeletingTable(null);
+                    setRelatedOrders([]);
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Batal
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

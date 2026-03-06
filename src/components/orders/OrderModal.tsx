@@ -28,7 +28,13 @@ interface OrderModalProps {
   tables: Table[];
   menuItems: MenuItem[];
   categories: Category[];
-  settings?: any;
+  settings?: {
+    tax_percentage?: number;
+    service_charge_percentage?: number;
+    delivery_fee?: number;
+    enable_delivery?: boolean;
+    [key: string]: any;
+  };
   onSubmit: (orderData: any) => void;
   onClose: () => void;
 }
@@ -45,7 +51,8 @@ export default function OrderModal({
   settings,
   onSubmit,
   onClose,
-}: OrderModalProps) {
+  isSubmitting = false,
+}: OrderModalProps & { isSubmitting?: boolean }) {
   const [orderType, setOrderType] = useState<'dine_in' | 'takeaway' | 'delivery'>('dine_in');
   const [selectedTable, setSelectedTable] = useState<string>('');
   const [customerName, setCustomerName] = useState('');
@@ -95,13 +102,23 @@ export default function OrderModal({
     return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
   };
 
-  const calculateTotal = () => {
-    const subtotal = calculateSubtotal();
-    const tax = subtotal * ((settings?.tax_percentage || 0) / 100);
-    const serviceCharge = subtotal * ((settings?.service_charge_percentage || 0) / 100);
-    const deliveryFee = orderType === 'delivery' ? (settings?.delivery_fee || 0) : 0;
+  const calculateTax = () => {
+    const taxPercentage = settings?.tax_percentage ?? 10;
+    return calculateSubtotal() * (taxPercentage / 100);
+  };
 
-    return subtotal + tax + serviceCharge + deliveryFee;
+  const calculateServiceCharge = () => {
+    const serviceChargePercentage = settings?.service_charge_percentage ?? 0;
+    return calculateSubtotal() * (serviceChargePercentage / 100);
+  };
+
+  const calculateDeliveryFee = () => {
+    if (orderType !== 'delivery') return 0;
+    return settings?.delivery_fee ?? 0;
+  };
+
+  const calculateTotal = () => {
+    return calculateSubtotal() + calculateTax() + calculateServiceCharge() + calculateDeliveryFee();
   };
 
   const handleSubmit = () => {
@@ -424,26 +441,26 @@ export default function OrderModal({
                   <span className="text-gray-600">Subtotal</span>
                   <span>Rp {calculateSubtotal().toLocaleString()}</span>
                 </div>
-                {settings?.service_charge_percentage > 0 && (
+                {(settings?.tax_percentage ?? 10) > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Service Charge ({settings.service_charge_percentage}%)</span>
-                    <span>Rp {(calculateSubtotal() * (settings.service_charge_percentage / 100)).toLocaleString()}</span>
+                    <span className="text-gray-600">Pajak ({settings?.tax_percentage ?? 10}%)</span>
+                    <span>Rp {calculateTax().toLocaleString()}</span>
                   </div>
                 )}
-                {settings?.tax_percentage > 0 && (
+                {(settings?.service_charge_percentage ?? 0) > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Pajak ({settings.tax_percentage}%)</span>
-                    <span>Rp {(calculateSubtotal() * (settings.tax_percentage / 100)).toLocaleString()}</span>
+                    <span className="text-gray-600">Service Charge ({settings?.service_charge_percentage ?? 0}%)</span>
+                    <span>Rp {calculateServiceCharge().toLocaleString()}</span>
                   </div>
                 )}
-                {orderType === 'delivery' && settings?.delivery_fee > 0 && (
+                {orderType === 'delivery' && (settings?.delivery_fee ?? 0) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Biaya Pengiriman</span>
-                    <span>Rp {settings.delivery_fee.toLocaleString()}</span>
+                    <span>Rp {calculateDeliveryFee().toLocaleString()}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-semibold text-lg pt-3 border-t">
-                  <span>Total</span>
+                  <span>Total (estimasi)</span>
                   <span>Rp {calculateTotal().toLocaleString()}</span>
                 </div>
               </div>
@@ -451,9 +468,17 @@ export default function OrderModal({
               <div className="space-y-3">
                 <button
                   onClick={handleSubmit}
-                  className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90"
+                  disabled={isSubmitting}
+                  className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
-                  Buat Order
+                  {isSubmitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                      Memproses...
+                    </>
+                  ) : (
+                    'Buat Order'
+                  )}
                 </button>
                 <button
                   onClick={onClose}

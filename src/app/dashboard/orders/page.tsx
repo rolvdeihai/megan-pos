@@ -29,11 +29,13 @@ export default function OrdersPage() {
   const [tables, setTables] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSummary, setOrderSummary] = useState({ active: 0, completed: 0 });
 
   // Gunakan useAuth yang sudah ada
@@ -124,6 +126,15 @@ export default function OrdersPage() {
       } else {
         setCategories(catData || []);
       }
+
+      // Fetch settings
+      const { data: settingsData } = await supabase
+        .from('restaurant_settings')
+        .select('*')
+        .eq('user_id', ownerId)
+        .single();
+
+      setSettings(settingsData || { tax_percentage: 10, service_charge_percentage: 0 });
     } catch (error) {
       console.error('Error in fetchData:', error);
     } finally {
@@ -133,6 +144,10 @@ export default function OrdersPage() {
 
   const createOrder = async (orderData: any) => {
     if (!ownerId || !user) return;
+    
+    // Prevent duplicate submission
+    if (isSubmitting) return;
+    setIsSubmitting(true);
 
     // --- ENFORCE TRANSACTION LIMIT ---
     let tier = user.subscription_tier || 'basic';
@@ -160,15 +175,26 @@ export default function OrdersPage() {
     // FIX: Pisahkan 'items' dari data order utama, karena 'items' tidak ada di tabel 'orders'
     const { items, ...orderFields } = orderData;
 
-    // Generate order number
-    const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
+    // Generate unique order number with random suffix to prevent collisions
+    const orderNumber = `ORD-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
 
     const subtotal = items.reduce((sum: number, item: any) =>
       sum + (item.price * item.quantity), 0);
 
-    const taxPercentage = 10; // Default tax
+    // Fetch tax, service charge, and delivery fee from restaurant settings
+    const { data: settings } = await supabase
+      .from('restaurant_settings')
+      .select('tax_percentage, service_charge_percentage, delivery_fee')
+      .eq('user_id', ownerId)
+      .single();
+
+    const taxPercentage = settings?.tax_percentage ?? 10;
+    const serviceChargePercentage = settings?.service_charge_percentage ?? 0;
+    const deliveryFee = orderFields.order_type === 'delivery' ? (settings?.delivery_fee ?? 0) : 0;
+    
     const taxAmount = subtotal * (taxPercentage / 100);
-    const totalAmount = subtotal + taxAmount;
+    const serviceChargeAmount = subtotal * (serviceChargePercentage / 100);
+    const totalAmount = subtotal + taxAmount + serviceChargeAmount + deliveryFee;
 
     const { data, error } = await supabase
       .from('orders')
@@ -180,6 +206,9 @@ export default function OrdersPage() {
         subtotal: subtotal,
         tax_percentage: taxPercentage,
         tax_amount: taxAmount,
+        service_charge_percentage: serviceChargePercentage,
+        service_charge_amount: serviceChargeAmount,
+        delivery_fee: deliveryFee,
         discount_percentage: 0,
         discount_amount: 0,
         total_amount: totalAmount,
@@ -219,6 +248,7 @@ export default function OrdersPage() {
           items: items.map((item: any) => `${item.name} x${item.quantity}`),
         });
       }
+    
 
       fetchData();
       setShowOrderModal(false);
@@ -226,6 +256,8 @@ export default function OrdersPage() {
       console.error('Error creating order:', error);
       alert('Gagal membuat order: ' + (error?.message || 'Unknown error'));
     }
+    
+    setIsSubmitting(false);
   };
 
   const completeOrder = async (orderId: string) => {
@@ -376,8 +408,10 @@ export default function OrdersPage() {
           tables={tables}
           menuItems={menuItems}
           categories={categories}
+          settings={settings}
           onSubmit={createOrder}
           onClose={() => setShowOrderModal(false)}
+          isSubmitting={isSubmitting}
         />
       )}
 

@@ -17,6 +17,7 @@ export default function NewOrderPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Gunakan useAuth yang sudah ada
   const { user } = useAuth();
@@ -68,13 +69,16 @@ export default function NewOrderPage() {
       .eq('user_id', ownerId)
       .single();
 
-    setSettings(settingsData || null);
-
+    setSettings(settingsData || { tax_percentage: 10, service_charge_percentage: 0 });
     setLoading(false);
   };
 
   const handleCreateOrder = async (orderData: any) => {
     if (!ownerId || !user) return;
+
+    // Prevent duplicate submission
+    if (isSubmitting) return;
+    setIsSubmitting(true);
 
     // --- ENFORCE TRANSACTION LIMIT ---
     let tier = user.subscription_tier || 'basic';
@@ -101,17 +105,17 @@ export default function NewOrderPage() {
 
     const { items, ...orderFields } = orderData;
 
-    // Generate order number
-    const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
+    // Generate unique order number with random suffix to prevent collisions
+    const orderNumber = `ORD-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
 
     const subtotal = items.reduce((sum: number, item: any) =>
       sum + (item.price * item.quantity), 0);
 
-    const taxPercentage = settings?.tax_percentage || 0;
+    const taxPercentage = settings?.tax_percentage ?? 10;
     const taxAmount = subtotal * (taxPercentage / 100);
-    const serviceChargePercentage = settings?.service_charge_percentage || 0;
+    const serviceChargePercentage = settings?.service_charge_percentage ?? 0;
     const serviceChargeAmount = subtotal * (serviceChargePercentage / 100);
-    const deliveryFee = orderFields.order_type === 'delivery' ? (settings?.delivery_fee || 0) : 0;
+    const deliveryFee = orderFields.order_type === 'delivery' ? (settings?.delivery_fee ?? 0) : 0;
 
     const totalAmount = subtotal + taxAmount + serviceChargeAmount + deliveryFee;
 
@@ -172,6 +176,7 @@ export default function NewOrderPage() {
     } else {
       console.error('Error creating order:', error);
       alert('Gagal membuat order: ' + (error?.message || 'Unknown error'));
+      setIsSubmitting(false);
     }
   };
 
@@ -200,6 +205,7 @@ export default function NewOrderPage() {
         settings={settings}
         onSubmit={handleCreateOrder}
         onClose={() => router.push('/dashboard/orders')}
+        isSubmitting={isSubmitting}
       />
     </div>
   );
