@@ -237,6 +237,15 @@ export default function PublicOrderPage() {
       // Generate order number
       const generatedOrderNumber = `ORD-${Date.now().toString().slice(-6)}`;
 
+      const subtotal = calculateSubtotal();
+      const taxPercentage = settings?.tax_percentage || 10;
+      const serviceChargePercentage = settings?.service_charge_percentage || 0;
+      const deliveryFee = orderType === 'delivery' ? (settings?.delivery_fee || 0) : 0;
+
+      const taxAmount = subtotal * (taxPercentage / 100);
+      const serviceChargeAmount = subtotal * (serviceChargePercentage / 100);
+      const totalAmount = subtotal + taxAmount + serviceChargeAmount + deliveryFee;
+
       const orderData = {
         user_id: restaurant.id,
         order_number: generatedOrderNumber,
@@ -246,13 +255,13 @@ export default function PublicOrderPage() {
         customer_phone: customerPhone,
         delivery_address: orderType === 'delivery' ? deliveryAddress : null,
         status: 'pending',
-        subtotal: calculateSubtotal(),
-        tax_percentage: settings?.tax_percentage || 0,
-        tax_amount: calculateSubtotal() * ((settings?.tax_percentage || 0) / 100),
-        service_charge_percentage: settings?.service_charge_percentage || 0,
-        service_charge_amount: calculateSubtotal() * ((settings?.service_charge_percentage || 0) / 100),
-        delivery_fee: orderType === 'delivery' ? (settings?.delivery_fee || 0) : 0,
-        total_amount: calculateTotal(),
+        subtotal: subtotal,
+        tax_percentage: taxPercentage,
+        tax_amount: taxAmount,
+        service_charge_percentage: serviceChargePercentage,
+        service_charge_amount: serviceChargeAmount,
+        delivery_fee: deliveryFee,
+        total_amount: totalAmount,
         payment_status: 'pending',
         notes,
       };
@@ -396,7 +405,7 @@ export default function PublicOrderPage() {
                 <div>
                   <div className="text-sm text-gray-500">Total</div>
                   <div className="font-medium">
-                    Rp {orderData?.total_amount ? orderData.total_amount.toLocaleString() : 0}
+                    Rp {(orderData?.total_amount || 0).toLocaleString()}
                   </div>
                 </div>
               </div>
