@@ -28,6 +28,7 @@ interface OrderModalProps {
   tables: Table[];
   menuItems: MenuItem[];
   categories: Category[];
+  settings?: any;
   onSubmit: (orderData: any) => void;
   onClose: () => void;
 }
@@ -41,6 +42,7 @@ export default function OrderModal({
   tables,
   menuItems,
   categories,
+  settings,
   onSubmit,
   onClose,
 }: OrderModalProps) {
@@ -89,8 +91,17 @@ export default function OrderModal({
     );
   };
 
-  const calculateTotal = () => {
+  const calculateSubtotal = () => {
     return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+  };
+
+  const calculateTotal = () => {
+    const subtotal = calculateSubtotal();
+    const tax = subtotal * ((settings?.tax_percentage || 0) / 100);
+    const serviceCharge = subtotal * ((settings?.service_charge_percentage || 0) / 100);
+    const deliveryFee = orderType === 'delivery' ? (settings?.delivery_fee || 0) : 0;
+
+    return subtotal + tax + serviceCharge + deliveryFee;
   };
 
   const handleSubmit = () => {
@@ -411,15 +422,29 @@ export default function OrderModal({
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Subtotal</span>
-                  <span>Rp {calculateTotal().toLocaleString()}</span>
+                  <span>Rp {calculateSubtotal().toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Pajak (10%)</span>
-                  <span>Rp {(calculateTotal() * 0.1).toLocaleString()}</span>
-                </div>
+                {settings?.service_charge_percentage > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Service Charge ({settings.service_charge_percentage}%)</span>
+                    <span>Rp {(calculateSubtotal() * (settings.service_charge_percentage / 100)).toLocaleString()}</span>
+                  </div>
+                )}
+                {settings?.tax_percentage > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Pajak ({settings.tax_percentage}%)</span>
+                    <span>Rp {(calculateSubtotal() * (settings.tax_percentage / 100)).toLocaleString()}</span>
+                  </div>
+                )}
+                {orderType === 'delivery' && settings?.delivery_fee > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Biaya Pengiriman</span>
+                    <span>Rp {settings.delivery_fee.toLocaleString()}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-semibold text-lg pt-3 border-t">
                   <span>Total</span>
-                  <span>Rp {(calculateTotal() * 1.1).toLocaleString()}</span>
+                  <span>Rp {calculateTotal().toLocaleString()}</span>
                 </div>
               </div>
 

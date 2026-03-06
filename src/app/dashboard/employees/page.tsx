@@ -16,7 +16,6 @@ type Employee = {
   role: 'admin' | 'cashier' | 'kitchen' | 'waiter' | 'manager';
   role_id: string | null;
   is_active: boolean;
-  pin_code: string;
   daily_rate?: number;
   monthly_salary?: number;
   created_at: string;
@@ -50,7 +49,6 @@ export default function EmployeesPage() {
     phone: '',
     role: 'cashier' as Employee['role'],
     role_id: '',
-    pin_code: '',
     daily_rate: '',
     monthly_salary: '',
   });
@@ -103,7 +101,6 @@ export default function EmployeesPage() {
       email: employee.email,
       phone: employee.phone,
       role: employee.role,
-      pin_code: '', // Kosongkan PIN saat edit agar aman (user isi jika ingin ganti)
       daily_rate: employee.daily_rate?.toString() || '',
       monthly_salary: employee.monthly_salary?.toString() || '',
       role_id: employee.role_id || '',
@@ -120,7 +117,6 @@ export default function EmployeesPage() {
       phone: '',
       role: 'cashier',
       role_id: '',
-      pin_code: '',
       daily_rate: '',
       monthly_salary: '',
     });
@@ -161,11 +157,6 @@ export default function EmployeesPage() {
           monthly_salary: formData.monthly_salary ? parseFloat(formData.monthly_salary) : null,
         };
 
-        // Hanya update PIN jika user mengisinya (tidak kosong)
-        if (formData.pin_code && formData.pin_code.length === 4) {
-          submitData.pin_code = formData.pin_code;
-        }
-
         const { error } = await supabase
           .from('employees')
           .update(submitData)
@@ -201,7 +192,6 @@ export default function EmployeesPage() {
         submitData.employee_code = employeeCode;
         submitData.user_id = user.id;
         submitData.created_by = user.id;
-        submitData.pin_code = formData.pin_code;
 
         const { error } = await supabase.from('employees').insert(submitData);
 
@@ -212,7 +202,7 @@ export default function EmployeesPage() {
       setShowForm(false);
       setEditingEmployee(null);
       setFormData({
-        full_name: '', email: '', phone: '', role: 'cashier', role_id: '', pin_code: '', daily_rate: '', monthly_salary: '',
+        full_name: '', email: '', phone: '', role: 'cashier', role_id: '', daily_rate: '', monthly_salary: '',
       });
       fetchEmployees();
 
@@ -338,7 +328,7 @@ export default function EmployeesPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Role *
                 </label>
-                
+
                 {/* Toggle between Legacy and Custom Role */}
                 <div className="flex items-center space-x-4 mb-3">
                   <label className="flex items-center">
@@ -402,21 +392,7 @@ export default function EmployeesPage() {
                 )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  PIN Code (4 digit) {editingEmployee && <span className="text-xs text-gray-400 font-normal">- Isi hanya jika ingin mengubah</span>}
-                </label>
-                <input
-                  type="password"
-                  maxLength={4}
-                  pattern="\d{4}"
-                  value={formData.pin_code}
-                  onChange={(e) => setFormData({ ...formData, pin_code: e.target.value })}
-                  placeholder={editingEmployee ? "****" : "Contoh: 1234"}
-                  required={!editingEmployee}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
-                />
-              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   Total Gaji Bulanan Pokok (Opsional)

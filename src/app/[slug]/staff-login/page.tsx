@@ -1,7 +1,7 @@
 // src/app/[slug]/staff-login/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
 
@@ -12,42 +12,53 @@ interface PageProps {
 export default function StaffLoginPage({ params }: PageProps) {
   const { slug } = use(params);
   const router = useRouter();
-  
-  const [pin, setPin] = useState('');
+
+  const [employees, setEmployees] = useState<{ id: string, full_name: string, role: string }[]>([]);
   const [error, setError] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loggingIn, setLoggingIn] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pin.length !== 4) return;
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const res = await fetch(`/api/staff/${slug}`);
+        if (res.ok) {
+          const data = await res.json();
+          setEmployees(data.employees || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch employees', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEmployees();
+  }, [slug]);
 
-    setLoading(true);
+  const handleSelectEmployee = async (employeeId: string) => {
+    setLoggingIn(employeeId);
     setError(false);
 
     try {
       const res = await fetch('/api/staff/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, pin }),
+        body: JSON.stringify({ slug, employeeId }),
       });
 
       const data = await res.json();
 
       if (res.ok && data.success) {
-        // Login berhasil, tunggu cookie tersimpan lalu redirect
-        // Cookie sudah diset oleh API route
         await new Promise(resolve => setTimeout(resolve, 100));
         router.push('/dashboard');
         router.refresh();
       } else {
         setError(true);
-        setPin('');
-        setLoading(false);
+        setLoggingIn(null);
       }
     } catch (error) {
       setError(true);
-      setPin('');
-      setLoading(false);
+      setLoggingIn(null);
     }
   };
 
@@ -62,67 +73,58 @@ export default function StaffLoginPage({ params }: PageProps) {
             <span className="text-3xl">👨‍🍳</span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Staff Login</h1>
-          <p className="text-slate-500 mt-2">Masukkan 4 digit PIN Anda</p>
+          <p className="text-slate-500 mt-2">Pilih nama Anda untuk masuk</p>
           <p className="text-xs text-indigo-600 font-semibold mt-1 uppercase tracking-wider">{slug}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="flex justify-center gap-3">
-            {[0, 1, 2, 3].map((index) => (
-              <input
-                key={index}
-                type="password"
-                maxLength={1}
-                inputMode="numeric"
-                autoFocus={index === 0}
-                className={`w-16 h-20 text-3xl text-center border-2 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${
-                  error ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white'
-                }`}
-                value={pin[index] || ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (!/^\d*$/.test(val)) return;
-                  
-                  const newPin = pin.split('');
-                  newPin[index] = val;
-                  setPin(newPin.join(''));
-                  
-                  if (val && index < 3) {
-                    (e.target.nextElementSibling as HTMLInputElement)?.focus();
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Backspace' && !pin[index] && index > 0) {
-                    const target = e.target as HTMLInputElement;
-                    (target.previousElementSibling as HTMLInputElement)?.focus();
-                  }
-                }}
-              />
-            ))}
+        {loading ? (
+          <div className="py-12 flex flex-col items-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <p className="mt-4 text-slate-500 text-sm">Memuat daftar karyawan...</p>
           </div>
+        ) : (
+          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+            {employees.length === 0 ? (
+              <p className="py-8 text-slate-400">Tidak ada karyawan aktif.</p>
+            ) : (
+              employees.map((emp) => (
+                <button
+                  key={emp.id}
+                  onClick={() => handleSelectEmployee(emp.id)}
+                  disabled={loggingIn !== null}
+                  className={`w-full p-4 rounded-xl border-2 text-left transition-all flex items-center justify-between hover:border-indigo-500 hover:bg-indigo-50/50 group ${loggingIn === emp.id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 bg-white'
+                    }`}
+                >
+                  <div>
+                    <p className="font-bold text-slate-900">{emp.full_name}</p>
+                    <p className="text-xs text-slate-500 uppercase tracking-tight">{emp.role}</p>
+                  </div>
+                  {loggingIn === emp.id ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-indigo-100 text-slate-400 group-hover:text-indigo-600 transition-colors">
+                      <span className="text-xl">→</span>
+                    </div>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        )}
 
-          {error && (
-            <p className="text-red-500 text-sm font-medium">
-              PIN salah atau karyawan tidak aktif
-            </p>
-          )}
+        {error && (
+          <p className="text-red-500 text-sm font-medium mt-4">
+            Gagal masuk. Silakan coba lagi.
+          </p>
+        )}
 
-          <button
-            type="submit"
-            disabled={loading || pin.length !== 4}
-            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-600/20"
-          >
-            {loading ? 'Memproses...' : 'Masuk ke Dashboard'}
-          </button>
-        </form>
-        
         <div className="mt-6">
-            <button 
-                onClick={() => router.push(`/${slug}`)}
-                className="text-sm text-slate-400 hover:text-slate-600"
-            >
-                &larr; Kembali ke Menu
-            </button>
+          <button
+            onClick={() => router.push(`/${slug}`)}
+            className="text-sm text-slate-400 hover:text-slate-600"
+          >
+            &larr; Kembali ke Menu
+          </button>
         </div>
       </div>
     </div>
