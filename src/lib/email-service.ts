@@ -31,6 +31,14 @@ export async function sendOTPEmail(data: EmailData): Promise<{ success: boolean;
         body: JSON.stringify(data),
       });
 
+      // Check if response is actually JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Email service returned non-JSON response:', text.substring(0, 500));
+        throw new Error('Email service returned invalid response. Please check the GAS URL configuration.');
+      }
+
       const result = await response.json();
       if (!result.success) throw new Error(result.error);
       return { success: true };
