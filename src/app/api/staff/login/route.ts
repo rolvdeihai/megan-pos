@@ -4,7 +4,14 @@ import { getEmployeePermissionsForAuth } from '@/lib/rbac-server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { slug, employeeId } = await request.json();
+    const { slug, pin } = await request.json();
+
+    if (!slug || !pin) {
+      return NextResponse.json(
+        { error: 'Restaurant dan PIN diperlukan' },
+        { status: 400 }
+      );
+    }
 
     // 1. Cari user berdasarkan restaurant_slug
     const { data: userData, error: userError } = await supabase
@@ -20,21 +27,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Cari employee berdasarkan user_id dan employeeId (tanpa PIN)
-    const { data: employeeData, error: employeeError } = await supabase
+    // 2. Cari employee berdasarkan PIN dan user_id
+    const { data: employees, error: employeeError } = await supabase
       .from('employees')
-      .select('id, full_name, role, role_id, email, user_id, roles(name)')
+      .select('id, full_name, role, role_id, email, user_id, pin_code, roles(name)')
       .eq('user_id', userData.id)
-      .eq('id', employeeId)
-      .eq('is_active', true)
-      .single();
+      .eq('pin_code', pin)
+      .eq('is_active', true);
 
-    if (employeeError || !employeeData) {
+    if (employeeError || !employees || employees.length === 0) {
       return NextResponse.json(
-        { error: 'Karyawan tidak ditemukan atau tidak aktif' },
+        { error: 'PIN salah atau karyawan tidak ditemukan' },
         { status: 401 }
       );
     }
+
+    // Ambil karyawan pertama jika ada multiple (PIN seharusnya unique)
+    const employeeData = employees[0];
 
     // 3. Buat response dengan cookie
     console.log('[Staff Login] Employee role_id:', employeeData.role_id, 'role:', employeeData.role);
