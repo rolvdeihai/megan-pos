@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { getOwnerId } from '@/lib/user-scope';
+import { getOwnerId, isEnterprise } from '@/lib/user-scope';
 import { PlusIcon, PencilIcon, TrashIcon, PhotoIcon } from '@heroicons/react/24/outline';
 
 type MenuItem = {
@@ -82,6 +82,7 @@ export default function MenuPage() {
 
   const { user } = useAuth();
   const ownerId = getOwnerId(user);
+  const canUseGramasi = isEnterprise(user);
 
   // Filtered items logic
   const filteredItems = useMemo(() => {
@@ -203,8 +204,8 @@ export default function MenuPage() {
         menuItemId = newItem.id;
       }
 
-      // Save Recipe Items (menu_item_ingredients)
-      if (menuItemId) {
+      // Save Recipe Items (menu_item_ingredients) - Enterprise only
+      if (menuItemId && canUseGramasi) {
         // Delete existing recipe items first
         await supabase
           .from('menu_item_ingredients')
@@ -831,78 +832,95 @@ export default function MenuPage() {
                     </div>
                   </div>
 
-                  {/* Recipes / Grammage section */}
-                  <div className="md:col-span-2 pt-4 border-t border-gray-200">
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-medium text-gray-900">Resep / Gramasi (Opsional)</h3>
-                      <button
-                        type="button"
-                        onClick={handleAddRecipeItem}
-                        className="text-sm px-3 py-1 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
-                      >
-                        + Tambah Bahan
-                      </button>
-                    </div>
-                    {itemForm.recipeItems.length === 0 ? (
-                      <p className="text-sm text-gray-500 italic">Belum ada bahan baku yang diatur. Jika Anda mengatur bahan makanan, stok inventory akan otomatis berkurang saat menu ini dipesan.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {itemForm.recipeItems.map((recipe, index) => (
-                          <div key={index} className="flex gap-4 items-end bg-gray-50 p-3 rounded-lg border border-gray-100">
-                            <div className="flex-1">
-                              <label className="block text-xs font-medium text-gray-700 mb-1">Bahan Baku</label>
-                              <select
-                                value={recipe.inventory_id}
-                                onChange={(e) => handleRecipeChange(index, 'inventory_id', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                required
-                              >
-                                <option value="">Pilih Bahan</option>
-                                {inventoryItems.map(inv => (
-                                  <option key={inv.id} value={inv.id}>
-                                    {inv.name} ({inv.category}) - {inv.unit}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="w-24">
-                              <label className="block text-xs font-medium text-gray-700 mb-1">Jumlah</label>
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                value={recipe.quantity}
-                                onChange={(e) => handleRecipeChange(index, 'quantity', parseFloat(e.target.value) || 0)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                required
-                              />
-                            </div>
-                            <div className="w-24">
-                              <label className="block text-xs font-medium text-gray-700 mb-1">Satuan</label>
-                              <select
-                                value={recipe.unit}
-                                onChange={(e) => handleRecipeChange(index, 'unit', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                              >
-                                <option value="gram">Gram</option>
-                                <option value="kg">Kg</option>
-                                <option value="ml">Mililiter</option>
-                                <option value="liter">Liter</option>
-                                <option value="pcs">Pcs</option>
-                              </select>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveRecipeItem(index)}
-                              className="mb-1 p-2 text-red-500 hover:bg-red-50 rounded-md"
-                            >
-                              <TrashIcon className="w-5 h-5" />
-                            </button>
-                          </div>
-                        ))}
+                  {/* Recipes / Grammage section - Enterprise only */}
+                  {canUseGramasi ? (
+                    <div className="md:col-span-2 pt-4 border-t border-gray-200">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-medium text-gray-900">Resep / Gramasi (Opsional)</h3>
+                        <button
+                          type="button"
+                          onClick={handleAddRecipeItem}
+                          className="text-sm px-3 py-1 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                        >
+                          + Tambah Bahan
+                        </button>
                       </div>
-                    )}
-                  </div>
+                      {itemForm.recipeItems.length === 0 ? (
+                        <p className="text-sm text-gray-500 italic">Belum ada bahan baku yang diatur. Jika Anda mengatur bahan makanan, stok inventory akan otomatis berkurang saat menu ini dipesan.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {itemForm.recipeItems.map((recipe, index) => (
+                            <div key={index} className="flex gap-4 items-end bg-gray-50 p-3 rounded-lg border border-gray-100">
+                              <div className="flex-1">
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Bahan Baku</label>
+                                <select
+                                  value={recipe.inventory_id}
+                                  onChange={(e) => handleRecipeChange(index, 'inventory_id', e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                  required
+                                >
+                                  <option value="">Pilih Bahan</option>
+                                  {inventoryItems.map(inv => (
+                                    <option key={inv.id} value={inv.id}>
+                                      {inv.name} ({inv.category}) - {inv.unit}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="w-24">
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Jumlah</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  value={recipe.quantity}
+                                  onChange={(e) => handleRecipeChange(index, 'quantity', parseFloat(e.target.value) || 0)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                  required
+                                />
+                              </div>
+                              <div className="w-24">
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Satuan</label>
+                                <select
+                                  value={recipe.unit}
+                                  onChange={(e) => handleRecipeChange(index, 'unit', e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                >
+                                  <option value="gram">Gram</option>
+                                  <option value="kg">Kg</option>
+                                  <option value="ml">Mililiter</option>
+                                  <option value="liter">Liter</option>
+                                  <option value="pcs">Pcs</option>
+                                </select>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveRecipeItem(index)}
+                                className="mb-1 p-2 text-red-500 hover:bg-red-50 rounded-md"
+                              >
+                                <TrashIcon className="w-5 h-5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="md:col-span-2 pt-4 border-t border-gray-200">
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="text-2xl">🔒</div>
+                          <div>
+                            <h3 className="font-medium text-gray-900">Fitur Gramasi</h3>
+                            <p className="text-sm text-gray-500 mt-1">
+                              Atur resep dan gramasi bahan baku untuk pengurangan inventory otomatis. 
+                              Upgrade ke paket <span className="font-semibold text-primary">Enterprise</span> untuk mengaktifkan fitur ini.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end space-x-4 pt-6 border-t">
