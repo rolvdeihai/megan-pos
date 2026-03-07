@@ -19,20 +19,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get user by email from auth system
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers({
-      filter: `email.eq.${email}`,
-    });
+    // Get user by email from database
+    const { data: userData, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('id, email')
+      .eq('email', email)
+      .single();
 
-    if (authError || !authData?.users?.length) {
-      console.error('Error finding user:', authError || 'No user found');
+    if (userError || !userData) {
+      console.error('Error finding user:', userError || 'No user found');
       return NextResponse.json(
         { error: 'User tidak ditemukan' },
         { status: 404 }
       );
     }
 
-    const userId = authData.users[0].id;
+    const userId = userData.id;
 
     // Update password using admin API
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
