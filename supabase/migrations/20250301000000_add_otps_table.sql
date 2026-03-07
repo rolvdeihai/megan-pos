@@ -46,4 +46,15 @@ CREATE TRIGGER update_otps_updated_at
     EXECUTE FUNCTION update_otps_updated_at();
 
 -- Enable realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE otps;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+    AND tablename = 'otps'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE otps;
+  END IF;
+END
+$$;
