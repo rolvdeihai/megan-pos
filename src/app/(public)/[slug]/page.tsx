@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/layout/Navbar';
 import { sendOrderEmail } from '@/lib/email-service';
@@ -40,7 +40,9 @@ export default function PublicOrderPage() {
   const [orderData, setOrderData] = useState<any>(null); // Store full order data
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const slug = params.slug as string;
+  const tableParam = searchParams.get('table');
 
   useEffect(() => {
     if (slug) {
@@ -140,6 +142,16 @@ export default function PublicOrderPage() {
           console.error('Error fetching tables:', tablesError);
         } else {
           setTables(tablesData || []);
+          
+          // Auto-select table from URL parameter
+          if (tableParam && tablesData) {
+            const matchedTable = tablesData.find(
+              (t) => t.table_number === tableParam || t.table_name === tableParam
+            );
+            if (matchedTable) {
+              setSelectedTable(matchedTable.id);
+            }
+          }
         }
       }
 
