@@ -19,23 +19,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get user by email
+    // Get user by email from database
     const { data: userData, error: userError } = await supabaseAdmin
       .from('users')
-      .select('id')
+      .select('id, email')
       .eq('email', email)
       .single();
 
     if (userError || !userData) {
+      console.error('Error finding user:', userError || 'No user found');
       return NextResponse.json(
         { error: 'User tidak ditemukan' },
         { status: 404 }
       );
     }
 
+    const userId = userData.id;
+
     // Update password using admin API
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      userData.id,
+      userId,
       { password }
     );
 

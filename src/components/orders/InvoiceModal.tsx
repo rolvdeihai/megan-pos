@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PrinterIcon, XMarkIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { isEnterprise } from '@/lib/user-scope';
 
 interface InvoiceModalProps {
   order: any;
@@ -142,6 +144,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
   };
 
   const [isProcessing, setIsProcessing] = useState(false);
+  const { user } = useAuth();
 
   const handlePayment = async () => {
     if (isProcessing) return; // Prevent double click
@@ -198,8 +201,9 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
 
       // Payment successful - now handle inventory and table (best effort, don't block on errors)
       try {
-        // Deduct inventory (Sistem Gramasi)
-        if (orderDetails && orderDetails.items.length > 0) {
+        // Deduct inventory (Sistem Gramasi) - Enterprise only
+        const canUseGramasi = isEnterprise(user);
+        if (canUseGramasi && orderDetails && orderDetails.items.length > 0) {
           for (const item of orderDetails.items) {
             const { data: recipes } = await supabase
               .from('menu_item_ingredients')
