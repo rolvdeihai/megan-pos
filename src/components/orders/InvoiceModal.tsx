@@ -146,14 +146,97 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
   const [isProcessing, setIsProcessing] = useState(false);
   const { user } = useAuth();
 
-  const handlePayment = async () => {
-    if (isProcessing) return; // Prevent double click
+  // ==================== INVENTORY & EXPENSE PROCESSING ====================
+  const processInventoryAndExpenses = async (skipStockUpdate = false) => {
+    if (!orderDetails || !user) return;
 
+    const canUseGramasi = user?.subscription_tier === 'pro' || user?.subscription_tier === 'enterprise';
+    if (!canUseGramasi) return;
+
+    for (const item of orderDetails.items) {
+      const { data: recipes } = await supabase
+        .from('menu_item_ingredients')
+        .select('*')
+        .eq('menu_item_id', item.menu_item_id);
+
+      if (!recipes || recipes.length === 0) continue;
+
+      for (const recipe of recipes) {
+        const totalDeduction = recipe.quantity * item.quantity;
+
+        const { data: invItem, error: invError } = await supabase
+          .from('inventory')
+          .select('id, name, current_stock, cost_per_unit, transactions_connected, expense_payment_method')
+          .eq('id', recipe.inventory_id)
+          .single();
+
+        if (invError || !invItem) {
+          console.error('Inventory item not found:', recipe.inventory_id);
+          continue;
+        }
+
+        // 1. Update stock (if not skipped)
+        if (!skipStockUpdate) {
+          const newStock = Math.max(0, invItem.current_stock - totalDeduction);
+          await supabase
+            .from('inventory')
+            .update({ current_stock: newStock })
+            .eq('id', recipe.inventory_id);
+        }
+
+        // 2. Create expense transaction if connected and not already exists
+        if (invItem.transactions_connected) {
+          // Check if expense already recorded for this order + inventory
+          const { data: existingExpense } = await supabase
+            .from('transactions')
+            .select('id')
+            .eq('order_id', orderDetails.id)
+            .eq('inventory_id', invItem.id)
+            .eq('type', 'expense')
+            .maybeSingle();
+
+          if (existingExpense) {
+            console.log('Expense already exists for', invItem.name);
+            continue;
+          }
+
+          const expenseAmount = invItem.cost_per_unit * totalDeduction;
+          const expenseTrxNumber = `EXP-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+
+          await supabase
+            .from('transactions')
+            .insert({
+              user_id: orderDetails.user_id,
+              order_id: orderDetails.id,
+              inventory_id: invItem.id,
+              transaction_number: expenseTrxNumber,
+              type: 'expense',
+              amount: expenseAmount,
+              payment_method: invItem.expense_payment_method || paymentMethod,
+              status: 'completed',
+              notes: `Penggunaan inventory "${invItem.name}" untuk order ${orderDetails.order_number}`,
+              created_at: new Date().toISOString(),
+            });
+        }
+      }
+    }
+
+    // Free the table if dine-in (idempotent)
+    if (orderDetails.table_id) {
+      await supabase
+        .from('restaurant_tables')
+        .update({ is_available: true })
+        .eq('id', orderDetails.table_id);
+    }
+  };
+  // ========================================================================
+
+  const handlePayment = async () => {
+    if (isProcessing) return;
     if (!paymentMethod) {
       alert('Pilih metode pembayaran terlebih dahulu');
       return;
     }
-
     if (paymentMethod === 'cash' && cashReceived < (orderDetails?.total_amount || 0)) {
       alert('Jumlah uang kurang dari total pembayaran');
       return;
@@ -162,93 +245,48 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
     setIsProcessing(true);
 
     try {
-      // Get user_id from orderDetails (fetchOrderDetails now includes it)
       const userId = orderDetails?.user_id;
+      if (!userId) throw new Error('User ID not found');
 
-      if (!userId) {
-        throw new Error('User ID not found');
-      }
-
-      // Call API to complete order
       const response = await fetch('/api/orders/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: order.id,
-          paymentMethod,
-          userId,
-        }),
+        body: JSON.stringify({ orderId: order.id, paymentMethod, userId }),
       });
 
       const data = await response.json();
 
-      // Check if it's a duplicate/already processed - treat as success
       if (data.duplicate) {
-        console.log('Transaction already exists, completing...');
+        console.log('Duplicate transaction detected', data);
+        if (data.shouldProcessInventory) {
+          // Full processing (stock + expenses) because order was pending
+          await processInventoryAndExpenses(false);
+        } else {
+          // Only create missing expenses (stock already correct)
+          await processInventoryAndExpenses(true);
+        }
         onComplete();
         return;
       }
 
       if (!response.ok) {
-        // Check if error is about duplicate transaction
         if (data.error?.includes('duplicate') || data.error?.includes('unique_transaction_per_order')) {
-          console.log('Duplicate transaction detected, completing...');
+          console.log('Duplicate error, processing missing expenses');
+          await processInventoryAndExpenses(true);
           onComplete();
           return;
         }
         throw new Error(data.error || 'Gagal memproses pembayaran');
       }
 
-      // Payment successful - now handle inventory and table (best effort, don't block on errors)
-      try {
-        // Deduct inventory (Sistem Gramasi) - Enterprise only
-        const canUseGramasi = isEnterprise(user);
-        if (canUseGramasi && orderDetails && orderDetails.items.length > 0) {
-          for (const item of orderDetails.items) {
-            const { data: recipes } = await supabase
-              .from('menu_item_ingredients')
-              .select('*')
-              .eq('menu_item_id', item.menu_item_id);
-
-            if (recipes && recipes.length > 0) {
-              for (const recipe of recipes) {
-                const totalDeduction = recipe.quantity * item.quantity;
-                const { data: invItem } = await supabase
-                  .from('inventory')
-                  .select('current_stock')
-                  .eq('id', recipe.inventory_id)
-                  .single();
-
-                if (invItem) {
-                  const newStock = Math.max(0, invItem.current_stock - totalDeduction);
-                  await supabase
-                    .from('inventory')
-                    .update({ current_stock: newStock })
-                    .eq('id', recipe.inventory_id);
-                }
-              }
-            }
-          }
-        }
-
-        // Free the table if it's a dine_in order with a table
-        if (orderDetails?.table_id) {
-          await supabase
-            .from('restaurant_tables')
-            .update({ is_available: true })
-            .eq('id', orderDetails.table_id);
-        }
-      } catch (sideEffectError) {
-        // Log error but don't block - payment already successful
-        console.error('Non-critical error during inventory/table update:', sideEffectError);
-      }
-
+      // First-time success – full processing
+      await processInventoryAndExpenses(false);
       onComplete();
     } catch (error: any) {
       console.error('Error processing payment:', error);
-      // Don't show error if it's a duplicate
       if (error.message?.includes('duplicate') || error.message?.includes('unique_transaction_per_order')) {
-        console.log('Duplicate transaction detected in error, completing...');
+        console.log('Duplicate in error, processing missing expenses');
+        await processInventoryAndExpenses(true);
         onComplete();
         return;
       }
