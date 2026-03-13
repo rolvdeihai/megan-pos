@@ -1,10 +1,8 @@
-// src/app/dashboard/inventory/page.tsx
-
 'use client';
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/components/auth/AuthProvider'; // Import useAuth
+import { useAuth } from '@/components/auth/AuthProvider';
 
 type InventoryItem = {
   id: string;
@@ -17,12 +15,15 @@ type InventoryItem = {
   cost_per_unit: number;
   supplier: string;
   last_restocked: string;
+  transactions_connected: boolean;
+  expense_payment_method: string;
 };
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null); // new
   const [formData, setFormData] = useState({
     sku: '',
     name: '',
@@ -32,9 +33,10 @@ export default function InventoryPage() {
     minimum_stock: 10,
     cost_per_unit: 0,
     supplier: '',
+    transactions_connected: false,
+    expense_payment_method: 'cash',
   });
 
-  // Gunakan useAuth hook
   const { user, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
@@ -45,48 +47,80 @@ export default function InventoryPage() {
 
   const fetchInventory = async () => {
     if (!user?.id) return;
-
     setLoading(true);
-
     const { data, error } = await supabase
       .from('inventory')
       .select('*')
       .eq('user_id', user.id)
       .order('name');
-
-    if (!error) {
-      setItems(data || []);
-    }
+    if (!error) setItems(data || []);
     setLoading(false);
+  };
+
+  const resetForm = () => {
+    setFormData({
+      sku: '',
+      name: '',
+      category: '',
+      unit: 'pcs',
+      current_stock: 0,
+      minimum_stock: 10,
+      cost_per_unit: 0,
+      supplier: '',
+      transactions_connected: false,
+      expense_payment_method: 'cash',
+    });
+    setEditingId(null);
+    setShowForm(false);
+  };
+
+  const handleEdit = (item: InventoryItem) => {
+    setFormData({
+      sku: item.sku,
+      name: item.name,
+      category: item.category || '',
+      unit: item.unit,
+      current_stock: item.current_stock,
+      minimum_stock: item.minimum_stock,
+      cost_per_unit: item.cost_per_unit,
+      supplier: item.supplier || '',
+      transactions_connected: item.transactions_connected ?? false,
+      expense_payment_method: item.expense_payment_method || 'cash',
+    });
+    setEditingId(item.id);
+    setShowForm(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!user?.id) return;
 
-    // Generate SKU if empty
     const sku = formData.sku || `INV-${Date.now().toString().slice(-6)}`;
-
-    const { error } = await supabase.from('inventory').insert({
+    const payload = {
       ...formData,
       sku,
       user_id: user.id,
       last_restocked: new Date().toISOString(),
-    });
+    };
+
+    let error = null;
+    if (editingId) {
+      // Update existing item
+      const { error: updateError } = await supabase
+        .from('inventory')
+        .update(payload)
+        .eq('id', editingId);
+      error = updateError;
+    } else {
+      // Insert new item
+      const { error: insertError } = await supabase
+        .from('inventory')
+        .insert(payload);
+      error = insertError;
+    }
 
     if (!error) {
-      setShowForm(false);
-      setFormData({
-        sku: '',
-        name: '',
-        category: '',
-        unit: 'pcs',
-        current_stock: 0,
-        minimum_stock: 10,
-        cost_per_unit: 0,
-        supplier: '',
-      });
+      resetForm();
       fetchInventory();
     } else {
       console.error('Error saving inventory:', error);
@@ -97,9 +131,7 @@ export default function InventoryPage() {
   const updateStock = async (id: string, adjustment: number) => {
     const item = items.find(i => i.id === id);
     if (!item) return;
-
     const newStock = Math.max(0, item.current_stock + adjustment);
-
     const { error } = await supabase
       .from('inventory')
       .update({
@@ -107,16 +139,13 @@ export default function InventoryPage() {
         last_restocked: adjustment > 0 ? new Date().toISOString() : item.last_restocked,
       })
       .eq('id', id);
-
-    if (!error) {
-      fetchInventory();
-    } else {
+    if (!error) fetchInventory();
+    else {
       console.error('Error updating stock:', error);
       alert('Gagal update stock');
     }
   };
 
-  // Tampilkan loading jika auth masih loading
   if (authLoading || loading) {
     return (
       <div className="max-w-7xl mx-auto py-8">
@@ -128,7 +157,6 @@ export default function InventoryPage() {
     );
   }
 
-  // Tampilkan pesan jika tidak ada user (belum login)
   if (!user) {
     return (
       <div className="max-w-7xl mx-auto py-8">
@@ -140,7 +168,6 @@ export default function InventoryPage() {
     );
   }
 
-  // --- ENFORCE INVENTORY TIER LIMIT ---
   let tier = user.subscription_tier || 'basic';
   if (tier === 'free') tier = 'basic';
   if (tier === 'basic') {
@@ -161,7 +188,6 @@ export default function InventoryPage() {
       </div>
     );
   }
-  // ------------------------------------
 
   const lowStockItems = items.filter(item => item.current_stock <= item.minimum_stock);
 
@@ -177,7 +203,10 @@ export default function InventoryPage() {
           )}
         </div>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => {
+            resetForm();
+            setShowForm(true);
+          }}
           className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
         >
           + Tambah Item
@@ -186,7 +215,9 @@ export default function InventoryPage() {
 
       {showForm && (
         <div className="mb-8 p-6 bg-white rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-4">Tambah Item Inventory</h2>
+          <h2 className="text-lg font-semibold mb-4">
+            {editingId ? 'Edit Item Inventory' : 'Tambah Item Inventory'}
+          </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -299,17 +330,46 @@ export default function InventoryPage() {
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary/30 focus:border-primary"
                 />
               </div>
+              <div className="col-span-2">
+                <div className="flex items-center space-x-4">
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.transactions_connected}
+                      onChange={(e) => setFormData({ ...formData, transactions_connected: e.target.checked })}
+                      className="rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Connect to transactions (auto‑record as expense)</span>
+                  </label>
+
+                  {formData.transactions_connected && (
+                    <div className="flex items-center space-x-2">
+                      <label className="text-sm text-gray-600">Payment method:</label>
+                      <select
+                        value={formData.expense_payment_method}
+                        onChange={(e) => setFormData({ ...formData, expense_payment_method: e.target.value })}
+                        className="px-3 py-1 border border-gray-300 rounded-md text-sm"
+                      >
+                        <option value="cash">Cash</option>
+                        <option value="card">Card</option>
+                        <option value="qris">QRIS</option>
+                        <option value="transfer">Transfer</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
             <div className="flex space-x-3">
               <button
                 type="submit"
                 className="px-4 py-2 bg-secondary text-white rounded-md hover:bg-secondary/90"
               >
-                Simpan
+                {editingId ? 'Update' : 'Simpan'}
               </button>
               <button
                 type="button"
-                onClick={() => setShowForm(false)}
+                onClick={resetForm}
                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
               >
                 Batal
@@ -383,25 +443,33 @@ export default function InventoryPage() {
                   {item.supplier}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex space-x-2">
+                  <div className="flex flex-col sm:flex-row gap-2 items-start">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => updateStock(item.id, 1)}
+                        className="px-2 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-semibold"
+                      >
+                        +1
+                      </button>
+                      <button
+                        onClick={() => updateStock(item.id, -1)}
+                        className="px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={item.current_stock <= 0}
+                      >
+                        -1
+                      </button>
+                      <button
+                        onClick={() => updateStock(item.id, 10)}
+                        className="px-2 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-semibold"
+                      >
+                        +10
+                      </button>
+                    </div>
                     <button
-                      onClick={() => updateStock(item.id, 1)}
-                      className="px-2 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-semibold"
+                      onClick={() => handleEdit(item)}
+                      className="px-2 py-1 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded text-xs font-semibold"
                     >
-                      +1
-                    </button>
-                    <button
-                      onClick={() => updateStock(item.id, -1)}
-                      className="px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={item.current_stock <= 0}
-                    >
-                      -1
-                    </button>
-                    <button
-                      onClick={() => updateStock(item.id, 10)}
-                      className="px-2 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-semibold"
-                    >
-                      +10
+                      Edit
                     </button>
                   </div>
                 </td>
