@@ -18,6 +18,7 @@ type Employee = {
   is_active: boolean;
   daily_rate?: number;
   monthly_salary?: number;
+  pin_code?: string;
   created_at: string;
 };
 
@@ -51,6 +52,7 @@ export default function EmployeesPage() {
     role_id: '',
     daily_rate: '',
     monthly_salary: '',
+    pin_code: '',
   });
 
   const { user, isLoading: authLoading } = useAuth();
@@ -104,8 +106,14 @@ export default function EmployeesPage() {
       daily_rate: employee.daily_rate?.toString() || '',
       monthly_salary: employee.monthly_salary?.toString() || '',
       role_id: employee.role_id || '',
+      pin_code: employee.pin_code || ''
     });
     setShowForm(true);
+  };
+
+  // Generate random 4-digit PIN
+  const generatePIN = () => {
+    return Math.floor(1000 + Math.random() * 9000).toString();
   };
 
   const handleAddNew = () => {
@@ -119,6 +127,7 @@ export default function EmployeesPage() {
       role_id: '',
       daily_rate: '',
       monthly_salary: '',
+      pin_code: generatePIN(),
     });
     setShowForm(true);
   };
@@ -192,6 +201,8 @@ export default function EmployeesPage() {
         submitData.employee_code = employeeCode;
         submitData.user_id = user.id;
         submitData.created_by = user.id;
+        // Add PIN code (required for new employees)
+        submitData.pin_code = formData.pin_code || generatePIN();
 
         const { error } = await supabase.from('employees').insert(submitData);
 
@@ -202,7 +213,7 @@ export default function EmployeesPage() {
       setShowForm(false);
       setEditingEmployee(null);
       setFormData({
-        full_name: '', email: '', phone: '', role: 'cashier', role_id: '', daily_rate: '', monthly_salary: '',
+        full_name: '', email: '', phone: '', role: 'cashier', role_id: '', daily_rate: '', monthly_salary: '', pin_code: '',
       });
       fetchEmployees();
 
@@ -322,6 +333,38 @@ export default function EmployeesPage() {
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary"
                 />
               </div>
+
+              {/* PIN Code - Required for new employees */}
+              {!editingEmployee && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    PIN Karyawan *
+                  </label>
+                  <div className="mt-1 flex space-x-2">
+                    <input
+                      type="text"
+                      required
+                      maxLength={4}
+                      minLength={4}
+                      pattern="\d{4}"
+                      value={formData.pin_code}
+                      onChange={(e) => setFormData({ ...formData, pin_code: e.target.value.replace(/\D/g, '').slice(0, 4) })}
+                      placeholder="4 digit angka"
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary/30 focus:border-primary font-mono tracking-widest"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, pin_code: generatePIN() })}
+                      className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm whitespace-nowrap"
+                    >
+                      🎲 Generate
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    PIN digunakan untuk login di halaman staff. Wajib 4 digit angka.
+                  </p>
+                </div>
+              )}
 
               {/* Role Selection */}
               <div className="md:col-span-2">
@@ -447,6 +490,7 @@ export default function EmployeesPage() {
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kode</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PIN</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
@@ -459,6 +503,11 @@ export default function EmployeesPage() {
                 <td className="px-6 py-4">
                   <div className="text-sm font-medium text-gray-900">{employee.full_name}</div>
                   <div className="text-sm text-gray-500">{employee.email}</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">
+                    {employee.pin_code || 'N/A'}
+                  </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${employee.role_id ? 'bg-purple-100 text-purple-800' : 'bg-primary/10 text-primary'}`}>

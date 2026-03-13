@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { hashPassword } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get user by email from database
+    // Get user by email from database (custom auth system)
     const { data: userData, error: userError } = await supabaseAdmin
       .from('users')
       .select('id, email')
@@ -34,18 +35,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userId = userData.id;
+    // Hash the new password using bcrypt
+    const passwordHash = await hashPassword(password);
 
-    // Update password using admin API
-    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      userId,
-      { password }
-    );
+    // Update password in the users table
+    const { error: updateError } = await supabaseAdmin
+      .from('users')
+      .update({ 
+        password_hash: passwordHash,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userData.id);
 
     if (updateError) {
       console.error('Error updating password:', updateError);
       return NextResponse.json(
-        { error: updateError.message },
+        { error: 'Gagal mengupdate password' },
         { status: 500 }
       );
     }
