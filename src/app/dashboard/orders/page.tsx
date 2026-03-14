@@ -261,10 +261,13 @@ export default function OrdersPage() {
   };
 
   const completeOrder = async (orderId: string) => {
-    // This callback is triggered by InvoiceModal after it has already
-    // handled the full payment flow (API call + transaction creation).
-    // Here we just refresh the UI and close the modal.
-    fetchData();
+    // Refresh data first (optional: await if you want to ensure fresh data before alert)
+    await fetchData();
+
+    // Show popup message
+    alert('✅ Transaksi selesai');
+
+    // Close the invoice modal after user acknowledges the popup
     setShowInvoiceModal(false);
   };
 

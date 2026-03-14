@@ -36,7 +36,7 @@ const packages = [
   },
   {
     id: 'enterprise',
-    name: 'Enterprise',
+    name: 'Corporate',   // ✅ changed from 'Enterprise'
     price: 800000,
     features: [
       'Unlimited transaksi',
