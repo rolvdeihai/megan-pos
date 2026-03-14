@@ -106,6 +106,7 @@ export default function EmployeesPage() {
       daily_rate: employee.daily_rate?.toString() || '',
       monthly_salary: employee.monthly_salary?.toString() || '',
       role_id: employee.role_id || '',
+      pin_code: employee.pin_code || ''
     });
     setShowForm(true);
   };

@@ -14,44 +14,104 @@ export type Database = {
   }
   public: {
     Tables: {
+      attendance_logs: {
+        Row: {
+          clock_in: string
+          clock_out: string | null
+          created_at: string | null
+          employee_id: string
+          id: string
+          notes: string | null
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          clock_in?: string
+          clock_out?: string | null
+          created_at?: string | null
+          employee_id: string
+          id?: string
+          notes?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          clock_in?: string
+          clock_out?: string | null
+          created_at?: string | null
+          employee_id?: string
+          id?: string
+          notes?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_logs_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           created_at: string | null
           created_by: string | null
+          daily_rate: number | null
           email: string | null
           employee_code: string | null
           full_name: string
           id: string
           is_active: boolean | null
+          monthly_salary: number | null
           phone: string | null
           pin_code: string
           role: string
+          role_id: string | null
           user_id: string
         }
         Insert: {
           created_at?: string | null
           created_by?: string | null
+          daily_rate?: number | null
           email?: string | null
           employee_code?: string | null
           full_name: string
           id?: string
           is_active?: boolean | null
+          monthly_salary?: number | null
           phone?: string | null
           pin_code: string
           role: string
+          role_id?: string | null
           user_id: string
         }
         Update: {
           created_at?: string | null
           created_by?: string | null
+          daily_rate?: number | null
           email?: string | null
           employee_code?: string | null
           full_name?: string
           id?: string
           is_active?: boolean | null
+          monthly_salary?: number | null
           phone?: string | null
           pin_code?: string
           role?: string
+          role_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -60,6 +120,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
             referencedColumns: ["id"]
           },
           {
@@ -282,39 +349,6 @@ export type Database = {
           },
         ]
       }
-      otps: {
-        Row: {
-          id: string
-          email: string
-          otp: string
-          type: string
-          expires_at: string
-          verified: boolean | null
-          created_at: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          id?: string
-          email: string
-          otp: string
-          type: string
-          expires_at: string
-          verified?: boolean | null
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          id?: string
-          email?: string
-          otp?: string
-          type?: string
-          expires_at?: string
-          verified?: boolean | null
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       orders: {
         Row: {
           completed_at: string | null
@@ -322,6 +356,7 @@ export type Database = {
           customer_name: string | null
           customer_phone: string | null
           delivery_address: string | null
+          delivery_fee: number | null
           discount_amount: number | null
           discount_percentage: number | null
           id: string
@@ -331,12 +366,15 @@ export type Database = {
           payment_method: string | null
           payment_status: string | null
           served_by: string | null
+          service_charge_amount: number | null
+          service_charge_percentage: number | null
           status: string
           subtotal: number
           table_id: string | null
           tax_amount: number | null
           tax_percentage: number | null
           total_amount: number
+          updated_at: string | null
           user_id: string
         }
         Insert: {
@@ -345,6 +383,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           delivery_address?: string | null
+          delivery_fee?: number | null
           discount_amount?: number | null
           discount_percentage?: number | null
           id?: string
@@ -354,12 +393,15 @@ export type Database = {
           payment_method?: string | null
           payment_status?: string | null
           served_by?: string | null
+          service_charge_amount?: number | null
+          service_charge_percentage?: number | null
           status: string
           subtotal: number
           table_id?: string | null
           tax_amount?: number | null
           tax_percentage?: number | null
           total_amount: number
+          updated_at?: string | null
           user_id: string
         }
         Update: {
@@ -368,6 +410,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           delivery_address?: string | null
+          delivery_fee?: number | null
           discount_amount?: number | null
           discount_percentage?: number | null
           id?: string
@@ -377,12 +420,15 @@ export type Database = {
           payment_method?: string | null
           payment_status?: string | null
           served_by?: string | null
+          service_charge_amount?: number | null
+          service_charge_percentage?: number | null
           status?: string
           subtotal?: number
           table_id?: string | null
           tax_amount?: number | null
           tax_percentage?: number | null
           total_amount?: number
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: [
@@ -408,6 +454,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      otps: {
+        Row: {
+          created_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          otp: string
+          type: string
+          updated_at: string | null
+          verified: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          expires_at: string
+          id?: string
+          otp: string
+          type: string
+          updated_at?: string | null
+          verified?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          otp?: string
+          type?: string
+          updated_at?: string | null
+          verified?: boolean | null
+        }
+        Relationships: []
       }
       packages: {
         Row: {
@@ -436,6 +515,87 @@ export type Database = {
           is_active?: boolean | null
           name?: string
           price?: number
+        }
+        Relationships: []
+      }
+      payrolls: {
+        Row: {
+          basic_salary: number | null
+          created_at: string | null
+          deductions: number | null
+          employee_id: string
+          id: string
+          net_salary: number | null
+          payment_date: string | null
+          period_end: string
+          period_start: string
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          basic_salary?: number | null
+          created_at?: string | null
+          deductions?: number | null
+          employee_id: string
+          id?: string
+          net_salary?: number | null
+          payment_date?: string | null
+          period_end: string
+          period_start: string
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          basic_salary?: number | null
+          created_at?: string | null
+          deductions?: number | null
+          employee_id?: string
+          id?: string
+          net_salary?: number | null
+          payment_date?: string | null
+          period_end?: string
+          period_start?: string
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payrolls_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payrolls_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      permissions: {
+        Row: {
+          code: string
+          created_at: string | null
+          description: string | null
+          id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
         }
         Relationships: []
       }
@@ -541,6 +701,7 @@ export type Database = {
           qr_code: string | null
           table_name: string | null
           table_number: string
+          updated_at: string | null
           user_id: string
         }
         Insert: {
@@ -551,6 +712,7 @@ export type Database = {
           qr_code?: string | null
           table_name?: string | null
           table_number: string
+          updated_at?: string | null
           user_id: string
         }
         Update: {
@@ -561,6 +723,7 @@ export type Database = {
           qr_code?: string | null
           table_name?: string | null
           table_number?: string
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: [
@@ -599,6 +762,65 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      role_permissions: {
+        Row: {
+          permission_id: string
+          role_id: string
+        }
+        Insert: {
+          permission_id: string
+          role_id: string
+        }
+        Update: {
+          permission_id?: string
+          role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_permission_id_fkey"
+            columns: ["permission_id"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_permissions_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transactions: {
         Row: {
@@ -654,7 +876,7 @@ export type Database = {
           {
             foreignKeyName: "transactions_order_id_fkey"
             columns: ["order_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "orders"
             referencedColumns: ["id"]
           },
@@ -765,7 +987,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      complete_order_transaction: {
+        Args: {
+          p_order_id: string
+          p_payment_method: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      create_payroll: {
+        Args: {
+          p_basic_salary?: number
+          p_deductions?: number
+          p_employee_id: string
+          p_net_salary?: number
+          p_period_end: string
+          p_period_start: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      get_payrolls: { Args: { p_user_id: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
