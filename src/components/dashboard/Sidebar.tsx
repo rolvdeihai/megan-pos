@@ -14,7 +14,11 @@ import {
   BuildingStorefrontIcon,
   ArrowRightOnRectangleIcon,
   XMarkIcon,
-  ShoppingBagIcon
+  ShoppingBagIcon,
+  ChevronDownIcon,
+  ClockIcon,
+  CurrencyDollarIcon,
+  ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider'; // Import useAuth
@@ -39,6 +43,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const [restaurant, setRestaurant] = useState<any>(null);
   const [subscription, setSubscription] = useState<any>(null);
+  const [employeesDropdownOpen, setEmployeesDropdownOpen] = useState(false);
 
   useEffect(() => {
     if (currentUser?.id) {
@@ -49,6 +54,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       setSubscription(null);
     }
   }, [currentUser]);
+
+  // Auto-expand Employees dropdown when in employees section
+  useEffect(() => {
+    const isEmployeesSection = pathname === '/dashboard/attendance' || 
+      pathname === '/dashboard/payroll' || 
+      pathname === '/dashboard/roles';
+    if (isEmployeesSection) {
+      setEmployeesDropdownOpen(true);
+    }
+  }, [pathname]);
 
   const fetchUserData = async () => {
     if (!currentUser) return;
@@ -173,6 +188,120 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           {navigation.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const ItemIcon = iconMap[item.href] || HomeIcon;
+            
+            // Special handling for Employees dropdown
+            if (item.href === '/dashboard/employees') {
+              const isEmployeesSection = pathname === '/dashboard/employees' || 
+                pathname === '/dashboard/attendance' || 
+                pathname === '/dashboard/payroll' || 
+                pathname === '/dashboard/roles';
+              
+              return (
+                <div key={item.href}>
+                  <button
+                    onClick={() => setEmployeesDropdownOpen(!employeesDropdownOpen)}
+                    className={`
+                      flex items-center w-full px-3 py-2 text-sm font-medium rounded-lg
+                      transition-colors duration-150 ease-in-out
+                      ${isEmployeesSection
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                      }
+                    `}
+                  >
+                    <ItemIcon className={`w-5 h-5 mr-3 ${
+                      isEmployeesSection ? 'text-primary' : 'text-gray-400'
+                    }`} />
+                    <span className="flex-1">{item.label}</span>
+                    <ChevronDownIcon className={`w-4 h-4 transition-transform ${
+                      employeesDropdownOpen ? 'rotate-180' : ''
+                    }`} />
+                  </button>
+                  
+                  {employeesDropdownOpen && (
+                    <div className="mt-1 ml-4 space-y-1">
+                      <Link
+                        href="/dashboard/employees"
+                        onClick={() => {
+                          if (window.innerWidth < 1024) {
+                            onClose();
+                          }
+                        }}
+                        className={`
+                          flex items-center px-3 py-2 text-sm font-medium rounded-lg
+                          transition-colors duration-150 ease-in-out
+                          ${pathname === '/dashboard/employees'
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                          }
+                        `}
+                      >
+                        <UserGroupIcon className="w-4 h-4 mr-3 text-gray-400" />
+                        Employees
+                      </Link>
+                      <Link
+                        href="/dashboard/attendance"
+                        onClick={() => {
+                          if (window.innerWidth < 1024) {
+                            onClose();
+                          }
+                        }}
+                        className={`
+                          flex items-center px-3 py-2 text-sm font-medium rounded-lg
+                          transition-colors duration-150 ease-in-out
+                          ${pathname === '/dashboard/attendance'
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                          }
+                        `}
+                      >
+                        <ClockIcon className="w-4 h-4 mr-3 text-gray-400" />
+                        Attendance
+                      </Link>
+                      <Link
+                        href="/dashboard/payroll"
+                        onClick={() => {
+                          if (window.innerWidth < 1024) {
+                            onClose();
+                          }
+                        }}
+                        className={`
+                          flex items-center px-3 py-2 text-sm font-medium rounded-lg
+                          transition-colors duration-150 ease-in-out
+                          ${pathname === '/dashboard/payroll'
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                          }
+                        `}
+                      >
+                        <CurrencyDollarIcon className="w-4 h-4 mr-3 text-gray-400" />
+                        Payroll
+                      </Link>
+                      <Link
+                        href="/dashboard/roles"
+                        onClick={() => {
+                          if (window.innerWidth < 1024) {
+                            onClose();
+                          }
+                        }}
+                        className={`
+                          flex items-center px-3 py-2 text-sm font-medium rounded-lg
+                          transition-colors duration-150 ease-in-out
+                          ${pathname === '/dashboard/roles'
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                          }
+                        `}
+                      >
+                        <ShieldCheckIcon className="w-4 h-4 mr-3 text-gray-400" />
+                        Roles
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            
             return (
               <Link
                 key={item.href}
