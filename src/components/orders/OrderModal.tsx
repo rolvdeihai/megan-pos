@@ -132,10 +132,10 @@ export default function OrderModal({
       return;
     }
 
-    if ((orderType === 'takeaway' || orderType === 'delivery') && !customerPhone) {
-      alert('Nomor telepon wajib diisi untuk order Takeaway dan Delivery');
-      return;
-    }
+    // if ((orderType === 'takeaway' || orderType === 'delivery') && !customerPhone) {
+    //   alert('Nomor telepon wajib diisi untuk order Takeaway dan Delivery');
+    //   return;
+    // }
 
     if (orderType === 'delivery' && !deliveryAddress) {
       alert('Alamat pengiriman wajib diisi untuk delivery');
@@ -146,7 +146,7 @@ export default function OrderModal({
       order_type: orderType,
       table_id: orderType === 'dine_in' ? selectedTable : null,
       customer_name: customerName,
-      customer_phone: customerPhone,
+      customer_phone: customerPhone && customerPhone.trim() !== '' ? customerPhone : null,  // ✅
       delivery_address: orderType === 'delivery' ? deliveryAddress : null,
       notes,
       items: cart.map(item => ({
@@ -261,8 +261,7 @@ export default function OrderModal({
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
-                        placeholder="08xxxxxxxxxx"
-                        required={orderType === 'takeaway' || orderType === 'delivery'}
+                        placeholder="08xxxxxxxxxx (opsional)"
                       />
                     </div>
                   </div>
