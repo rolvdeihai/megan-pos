@@ -18,6 +18,7 @@ export default function Navbar({ mode, restaurant, settings }: NavbarProps) {
     const { user, logout: ownerLogout } = useAuth();
     const { staff, logout: staffLogout } = useStaff();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [employeesDropdownOpen, setEmployeesDropdownOpen] = useState(false);
     const [permissions, setPermissions] = useState<string[]>([]);
 
     // Determine current user (Owner or Staff)
@@ -43,6 +44,16 @@ export default function Navbar({ mode, restaurant, settings }: NavbarProps) {
 
         setPermissions([]);
     }, [currentUser, isStaff]);
+
+    // Auto-expand Employees dropdown when in employees section
+    useEffect(() => {
+        const isEmployeesSection = pathname === '/dashboard/attendance' || 
+            pathname === '/dashboard/payroll' || 
+            pathname === '/dashboard/roles';
+        if (isEmployeesSection) {
+            setEmployeesDropdownOpen(true);
+        }
+    }, [pathname]);
 
     const handleLogout = async () => {
         if (isStaff) {
@@ -199,6 +210,83 @@ export default function Navbar({ mode, restaurant, settings }: NavbarProps) {
                         <div className="hidden md:flex space-x-1">
                             {filteredLinks.map((link) => {
                                 const isActive = pathname === link.href || pathname?.startsWith(`${link.href}/`);
+                                
+                                // Special handling for Employees dropdown with hover (desktop) and click (mobile)
+                                if (link.href === '/dashboard/employees') {
+                                    const isEmployeesSection = pathname === '/dashboard/employees' || 
+                                        pathname === '/dashboard/attendance' || 
+                                        pathname === '/dashboard/payroll' || 
+                                        pathname === '/dashboard/roles';
+                                    
+                                    return (
+                                        <div 
+                                            key={link.href} 
+                                            className="relative hidden md:block"
+                                            onMouseEnter={() => setEmployeesDropdownOpen(true)}
+                                            onMouseLeave={() => setEmployeesDropdownOpen(false)}
+                                        >
+                                            <Link
+                                                href="/dashboard/employees"
+                                                className={`flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                                                    isEmployeesSection
+                                                        ? 'bg-primary/10 text-primary'
+                                                        : 'text-slate-600 hover:text-primary hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                {link.label}
+                                                <svg 
+                                                    className={`w-4 h-4 transition-transform ${employeesDropdownOpen ? 'rotate-180' : ''}`} 
+                                                    fill="none" 
+                                                    stroke="currentColor" 
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </Link>
+                                            
+                                            {employeesDropdownOpen && (
+                                                <div className="absolute top-full left-0 pt-2">
+                                                    <div className="w-48 bg-white rounded-lg shadow-lg border border-slate-200/70 py-1">
+                                                    <Link
+                                                        href="/dashboard/attendance"
+                                                        onClick={() => setEmployeesDropdownOpen(false)}
+                                                        className={`block px-4 py-2 text-sm ${
+                                                            pathname === '/dashboard/attendance'
+                                                                ? 'bg-primary/10 text-primary'
+                                                                : 'text-slate-700 hover:bg-slate-50'
+                                                        }`}
+                                                    >
+                                                        Attendance
+                                                    </Link>
+                                                    <Link
+                                                        href="/dashboard/payroll"
+                                                        onClick={() => setEmployeesDropdownOpen(false)}
+                                                        className={`block px-4 py-2 text-sm ${
+                                                            pathname === '/dashboard/payroll'
+                                                                ? 'bg-primary/10 text-primary'
+                                                                : 'text-slate-700 hover:bg-slate-50'
+                                                        }`}
+                                                    >
+                                                        Payroll
+                                                    </Link>
+                                                    <Link
+                                                        href="/dashboard/roles"
+                                                        onClick={() => setEmployeesDropdownOpen(false)}
+                                                        className={`block px-4 py-2 text-sm ${
+                                                            pathname === '/dashboard/roles'
+                                                                ? 'bg-primary/10 text-primary'
+                                                                : 'text-slate-700 hover:bg-slate-50'
+                                                        }`}
+                                                    >
+                                                        Roles
+                                                    </Link>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                }
+                                
                                 return (
                                     <Link
                                         key={link.href}
@@ -253,19 +341,100 @@ export default function Navbar({ mode, restaurant, settings }: NavbarProps) {
             {/* Mobile Menu Dropdown */}
             {isMobileMenuOpen && (
                 <div className="md:hidden border-t border-slate-200/70 py-2 px-4 space-y-1 bg-white/95">
-                    {filteredLinks.map((link) => (
-                        <Link
-                            key={link.href}
-                            href={link.href}
-                            className={`block px-3 py-2 text-base font-medium rounded-md ${pathname === link.href
-                                ? 'bg-slate-100 text-slate-900'
-                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                                }`}
-                            onClick={() => setIsMobileMenuOpen(false)}
-                        >
-                            {link.label}
-                        </Link>
-                    ))}
+                    {filteredLinks.map((link) => {
+                        // Special handling for Employees in mobile menu
+                        if (link.href === '/dashboard/employees') {
+                            const isEmployeesSection = pathname === '/dashboard/employees' || 
+                                pathname === '/dashboard/attendance' || 
+                                pathname === '/dashboard/payroll' || 
+                                pathname === '/dashboard/roles';
+                            
+                            return (
+                                <div key={link.href}>
+                                    <button
+                                        onClick={() => setEmployeesDropdownOpen(!employeesDropdownOpen)}
+                                        className={`flex items-center justify-between w-full px-3 py-2 text-base font-medium rounded-md ${
+                                            isEmployeesSection
+                                                ? 'bg-slate-100 text-slate-900'
+                                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        <span>{link.label}</span>
+                                        <svg 
+                                            className={`w-4 h-4 transition-transform ${employeesDropdownOpen ? 'rotate-180' : ''}`} 
+                                            fill="none" 
+                                            stroke="currentColor" 
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </button>
+                                    {employeesDropdownOpen && (
+                                        <div className="ml-4 mt-1 space-y-1">
+                                            <Link
+                                                href="/dashboard/employees"
+                                                onClick={() => setIsMobileMenuOpen(false)}
+                                                className={`block px-3 py-2 text-sm font-medium rounded-md ${
+                                                    pathname === '/dashboard/employees'
+                                                        ? 'bg-slate-100 text-slate-900'
+                                                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                }`}
+                                            >
+                                                Employees
+                                            </Link>
+                                            <Link
+                                                href="/dashboard/attendance"
+                                                onClick={() => setIsMobileMenuOpen(false)}
+                                                className={`block px-3 py-2 text-sm font-medium rounded-md ${
+                                                    pathname === '/dashboard/attendance'
+                                                        ? 'bg-slate-100 text-slate-900'
+                                                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                }`}
+                                            >
+                                                Attendance
+                                            </Link>
+                                            <Link
+                                                href="/dashboard/payroll"
+                                                onClick={() => setIsMobileMenuOpen(false)}
+                                                className={`block px-3 py-2 text-sm font-medium rounded-md ${
+                                                    pathname === '/dashboard/payroll'
+                                                        ? 'bg-slate-100 text-slate-900'
+                                                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                }`}
+                                            >
+                                                Payroll
+                                            </Link>
+                                            <Link
+                                                href="/dashboard/roles"
+                                                onClick={() => setIsMobileMenuOpen(false)}
+                                                className={`block px-3 py-2 text-sm font-medium rounded-md ${
+                                                    pathname === '/dashboard/roles'
+                                                        ? 'bg-slate-100 text-slate-900'
+                                                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                }`}
+                                            >
+                                                Roles
+                                            </Link>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        }
+                        
+                        return (
+                            <Link
+                                key={link.href}
+                                href={link.href}
+                                className={`block px-3 py-2 text-base font-medium rounded-md ${pathname === link.href
+                                    ? 'bg-slate-100 text-slate-900'
+                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                    }`}
+                                onClick={() => setIsMobileMenuOpen(false)}
+                            >
+                                {link.label}
+                            </Link>
+                        );
+                    })}
                 </div>
             )}
         </nav>
