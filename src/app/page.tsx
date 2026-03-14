@@ -99,7 +99,7 @@ export default function HomePage() {
       color: 'border-blue-500 border-2'
     },
     {
-      name: 'Enterprise',
+      name: 'Corporate', // renamed from Enterprise
       price: '800K',
       period: '/bulan',
       features: [
