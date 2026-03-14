@@ -52,8 +52,9 @@ export default function StaffLoginPage({ params }: PageProps) {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        router.push('/dashboard');
-        router.refresh();
+        // Gunakan window.location untuk force full page reload
+        // agar middleware bisa membaca cookie dengan benar
+        window.location.href = '/dashboard';
       } else {
         setError(data.error || 'PIN salah');
         setPin('');
