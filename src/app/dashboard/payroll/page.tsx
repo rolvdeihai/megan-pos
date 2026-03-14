@@ -41,6 +41,11 @@ export default function PayrollPage() {
     const [periodStart, setPeriodStart] = useState<string>('');
     const [periodEnd, setPeriodEnd] = useState<string>('');
     const [draftCalculations, setDraftCalculations] = useState<any>(null);
+    
+    // Edit payroll states
+    const [editingPayroll, setEditingPayroll] = useState<Payroll | null>(null);
+    const [editBasicSalary, setEditBasicSalary] = useState<string>('');
+    const [editDeductions, setEditDeductions] = useState<string>('');
 
     useEffect(() => {
         if (user?.id) {
@@ -195,6 +200,46 @@ export default function PayrollPage() {
         }
     };
 
+    const openEditModal = (payroll: Payroll) => {
+        setEditingPayroll(payroll);
+        setEditBasicSalary(payroll.basic_salary.toString());
+        setEditDeductions(payroll.deductions.toString());
+    };
+
+    const handleUpdatePayroll = async () => {
+        if (!editingPayroll) return;
+
+        const basicSalary = parseFloat(editBasicSalary);
+        const deductions = parseFloat(editDeductions);
+        
+        if (isNaN(basicSalary) || isNaN(deductions)) {
+            alert('Gaji pokok dan potongan harus berupa angka');
+            return;
+        }
+
+        const netSalary = basicSalary - deductions;
+
+        try {
+            const { error } = await supabase
+                .from('payrolls')
+                .update({
+                    basic_salary: basicSalary,
+                    deductions: deductions,
+                    net_salary: netSalary
+                })
+                .eq('id', editingPayroll.id);
+
+            if (error) throw error;
+            
+            setEditingPayroll(null);
+            fetchData();
+            alert('Slip gaji berhasil diperbarui');
+        } catch (error) {
+            console.error('Error updating payroll:', error);
+            alert('Gagal memperbarui slip gaji');
+        }
+    };
+
 
     if (loading) {
         return (
@@ -263,11 +308,17 @@ export default function PayrollPage() {
                                         {payroll.status === 'paid' ? 'Dibayar' : 'Draft'}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                                    <button
+                                        onClick={() => openEditModal(payroll)}
+                                        className="text-blue-600 hover:text-blue-800 mr-2"
+                                    >
+                                        Edit
+                                    </button>
                                     {payroll.status === 'draft' && (
                                         <button
                                             onClick={() => markAsPaid(payroll.id)}
-                                            className="text-primary hover:text-primary/70"
+                                            className="text-primary hover:text-primary/70 mr-2"
                                         >
                                             Bayar
                                         </button>
@@ -373,6 +424,69 @@ export default function PayrollPage() {
                                 className="flex-1 px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50"
                             >
                                 Simpan Draft
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Edit Payroll */}
+            {editingPayroll && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg">
+                        <h2 className="text-2xl font-bold mb-4">Edit Slip Gaji</h2>
+                        
+                        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                            <p className="text-sm text-gray-600">Karyawan: <span className="font-semibold">{editingPayroll.employee.full_name}</span></p>
+                            <p className="text-sm text-gray-600">Periode: {new Date(editingPayroll.period_start).toLocaleDateString('id-ID')} - {new Date(editingPayroll.period_end).toLocaleDateString('id-ID')}</p>
+                            <p className="text-sm text-gray-600">Status: <span className={`font-semibold ${editingPayroll.status === 'paid' ? 'text-green-600' : 'text-yellow-600'}`}>{editingPayroll.status === 'paid' ? 'Sudah Dibayar' : 'Draft'}</span></p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Gaji Pokok / Total Rate (Rp)</label>
+                                <input
+                                    type="number"
+                                    value={editBasicSalary}
+                                    onChange={(e) => setEditBasicSalary(e.target.value)}
+                                    className="w-full px-3 py-2 border rounded-lg focus:ring-primary focus:border-primary"
+                                    placeholder="0"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Potongan (Rp)</label>
+                                <input
+                                    type="number"
+                                    value={editDeductions}
+                                    onChange={(e) => setEditDeductions(e.target.value)}
+                                    className="w-full px-3 py-2 border rounded-lg focus:ring-primary focus:border-primary"
+                                    placeholder="0"
+                                />
+                            </div>
+
+                            <div className="p-4 bg-green-50 rounded-lg">
+                                <div className="flex justify-between font-bold text-lg">
+                                    <span className="text-gray-800">Gaji Bersih (Nett):</span>
+                                    <span className="text-green-700">
+                                        Rp {(parseFloat(editBasicSalary || '0') - parseFloat(editDeductions || '0')).toLocaleString()}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex space-x-3 mt-8">
+                            <button
+                                onClick={() => setEditingPayroll(null)}
+                                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleUpdatePayroll}
+                                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90"
+                            >
+                                Simpan Perubahan
                             </button>
                         </div>
                     </div>
