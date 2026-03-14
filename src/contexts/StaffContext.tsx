@@ -21,7 +21,7 @@ type StaffMember = {
 interface StaffContextType {
   staff: StaffMember | null;
   loading: boolean;
-  login: (slug: string, employeeId: string) => Promise<boolean>;
+  login: (slug: string, pin: string) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -52,12 +52,12 @@ export function StaffProvider({ children }: { children: ReactNode }) {
     checkCurrentUser();
   }, []);
 
-  const login = async (slug: string, employeeId: string): Promise<boolean> => {
+  const login = async (slug: string, pin: string): Promise<boolean> => {
     try {
       const res = await fetch('/api/staff/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, employeeId }),
+        body: JSON.stringify({ slug, pin }),
       });
 
       const data = await res.json();
