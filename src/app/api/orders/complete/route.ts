@@ -19,14 +19,6 @@ export async function POST(request: NextRequest) {
       .eq('order_id', orderId)
       .maybeSingle();
 
-    if (existingTx) {
-      return NextResponse.json({
-        success: true,
-        message: 'Transaksi sudah ada',
-        duplicate: true,
-      });
-    }
-
     // Get order details
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
@@ -41,7 +33,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update order status and free table in a single batch
+    // --- DUPLICATE HANDLING ---
+    if (existingTx) {
+      // If order is already completed, nothing to do
+      if (order.status === 'completed') {
+        return NextResponse.json({
+          success: true,
+          message: 'Order sudah selesai',
+          duplicate: true,
+          shouldProcessInventory: false,
+        });
+      }
+
+      // Order is pending but transaction exists – complete the order
+      console.log('Transaction exists but order pending – completing order');
+
+      const { error: updateError } = await supabaseAdmin
+        .from('orders')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          payment_status: 'paid',
+        })
+        .eq('id', orderId);
+
+      if (updateError) {
+        return NextResponse.json(
+          { error: updateError.message },
+          { status: 500 }
+        );
+      }
+
+      if (order.table_id) {
+        await supabaseAdmin
+          .from('restaurant_tables')
+          .update({ is_available: true })
+          .eq('id', order.table_id);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Order telah diselesaikan (transaksi sudah ada)',
+        duplicate: true,
+        shouldProcessInventory: true, // client must process inventory (stock + expenses)
+      });
+    }
+
+    // --- NO EXISTING TRANSACTION – NORMAL FLOW ---
+    // Update order status
     const { error: updateError } = await supabaseAdmin
       .from('orders')
       .update({
@@ -58,18 +97,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Free the table IMMEDIATELY if dine-in (before creating transaction)
-    // This ensures table is available even if transaction creation fails
+    // Free the table
     if (order.table_id) {
-      const { error: tableError } = await supabaseAdmin
+      await supabaseAdmin
         .from('restaurant_tables')
         .update({ is_available: true })
         .eq('id', order.table_id);
-      
-      if (tableError) {
-        console.error('Error freeing table:', tableError);
-        // Don't fail the request, but log the error
-      }
     }
 
     // Create transaction record
@@ -87,12 +120,13 @@ export async function POST(request: NextRequest) {
       });
 
     if (transactionError) {
-      // Handle unique constraint violation (duplicate transaction)
+      // Handle unique constraint violation (rare race condition)
       if (transactionError.code === '23505') {
         return NextResponse.json({
           success: true,
-          message: 'Transaksi sudah ada',
+          message: 'Transaksi sudah ada (race condition)',
           duplicate: true,
+          shouldProcessInventory: true, // client must process inventory
         });
       }
       return NextResponse.json(
