@@ -14,9 +14,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: 'Inventory', href: '/dashboard/inventory', permission: PERMISSIONS.MANAGE_INVENTORY },
   { label: 'Transactions', href: '/dashboard/transactions', permission: PERMISSIONS.VIEW_REPORTS },
   { label: 'Employees', href: '/dashboard/employees', permission: PERMISSIONS.MANAGE_STAFF },
-  { label: 'Attendance', href: '/dashboard/attendance', permission: PERMISSIONS.MANAGE_ATTENDANCE },
-  { label: 'Payroll', href: '/dashboard/payroll', permission: PERMISSIONS.MANAGE_PAYROLL },
-  { label: 'Roles', href: '/dashboard/roles', permission: PERMISSIONS.MANAGE_STAFF },
+  // Attendance, Payroll, Roles now in Employees dropdown
   { label: 'Settings', href: '/dashboard/settings', permission: PERMISSIONS.MANAGE_SETTINGS },
   { label: 'Billing', href: '/dashboard/billing', permission: PERMISSIONS.MANAGE_BILLING },
 ];
