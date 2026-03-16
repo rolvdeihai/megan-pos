@@ -5,6 +5,16 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { getOwnerId, isEnterprise } from '@/lib/user-scope';
 import { PlusIcon, PencilIcon, TrashIcon, PhotoIcon } from '@heroicons/react/24/outline';
+import { ChevronLeftIcon, ChevronRightIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline';
+import Tesseract from 'tesseract.js';
+
+type ParsedMenuItem = {
+  name: string;
+  description?: string;
+  price: number;
+  category?: string;
+  tags?: string[];
+};
 
 type MenuItem = {
   id: string;
@@ -56,6 +66,11 @@ export default function MenuPage() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [unsavedItems, setUnsavedItems] = useState<MenuItem[]>([]);          // temporary items
+  const [showBulkModal, setShowBulkModal] = useState(false);                // bulk review modal
+  const [activeItemIndex, setActiveItemIndex] = useState(0);                // current item index in modal
+  const [uploadLoading, setUploadLoading] = useState(false);                // loading for OCR/AI
+  const [ocrError, setOcrError] = useState<string | null>(null);
 
   // Form states
   const [itemForm, setItemForm] = useState({
@@ -162,6 +177,180 @@ export default function MenuPage() {
       console.error('Error in fetchData:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const splitTextIntoChunks = (text: string, maxCharsPerChunk: number): string[] => {
+    const lines = text.split('\n');
+    const chunks: string[] = [];
+    let currentChunk = '';
+
+    for (const line of lines) {
+      // If a single line exceeds maxChars, split it arbitrarily (rare)
+      if (line.length > maxCharsPerChunk) {
+        // If currentChunk has content, push it first
+        if (currentChunk) {
+          chunks.push(currentChunk);
+          currentChunk = '';
+        }
+        // Split the long line into parts of maxCharsPerChunk
+        for (let i = 0; i < line.length; i += maxCharsPerChunk) {
+          chunks.push(line.slice(i, i + maxCharsPerChunk));
+        }
+        continue;
+      }
+
+      // Check if adding this line would exceed the limit
+      if ((currentChunk + '\n' + line).length > maxCharsPerChunk) {
+        chunks.push(currentChunk);
+        currentChunk = line;
+      } else {
+        currentChunk = currentChunk ? currentChunk + '\n' + line : line;
+      }
+    }
+
+    if (currentChunk) {
+      chunks.push(currentChunk);
+    }
+    return chunks;
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadLoading(true);
+    setOcrError(null);
+
+    try {
+      // OCR
+      const { data: { text } } = await Tesseract.recognize(file, 'eng', {
+        logger: m => console.log(m)
+      });
+
+      if (!text.trim()) throw new Error('Tidak ada teks yang terdeteksi');
+      console.log('OCR text:', text);
+
+      // Split OCR text into chunks (respect 512 token limit)
+      const MAX_CHARS_PER_CHUNK = 800; // ~200 tokens input, leaving 300 for output
+      const chunks = splitTextIntoChunks(text, MAX_CHARS_PER_CHUNK);
+      console.log(`Splitting OCR text into ${chunks.length} chunks`);
+
+      let allParsedItems: any[] = [];
+      const MAX_CHUNKS = 5; // safety limit
+
+      for (let i = 0; i < Math.min(chunks.length, MAX_CHUNKS); i++) {
+        try {
+          const parsedItems = await parseMenuWithAI(chunks[i]);
+          allParsedItems = [...allParsedItems, ...parsedItems];
+        } catch (error) {
+          console.error(`Error parsing chunk ${i + 1}:`, error);
+          // Continue with next chunk
+        }
+      }
+
+      // Convert parsed items to MenuItem format
+      const newUnsavedItems = allParsedItems.map((item: any) => ({
+        id: `temp-${Date.now()}-${Math.random()}`,
+        name: item.name || '',
+        description: item.description || '',
+        price: item.price || 0,
+        cost_price: 0,
+        sku: '',
+        is_available: true,
+        is_featured: false,
+        image_url: '',
+        preparation_time: 0,
+        category_id: '',
+        category_name: item.category || '',
+        tags: item.tags || [],
+      }));
+
+      // If no items were parsed, show a blank item for manual entry
+      if (newUnsavedItems.length === 0) {
+        const blankItem: MenuItem = {
+          id: `temp-${Date.now()}-${Math.random()}`,
+          name: '',
+          description: '',
+          price: 0,
+          cost_price: 0,
+          sku: '',
+          is_available: true,
+          is_featured: false,
+          image_url: '',
+          preparation_time: 0,
+          category_id: '',
+          category_name: '',
+          tags: [],
+        };
+        setUnsavedItems([blankItem]);
+      } else {
+        setUnsavedItems(newUnsavedItems);
+      }
+
+      // Open the bulk modal
+      setShowBulkModal(true);
+      setActiveItemIndex(0);
+    } catch (error: any) {
+      console.error(error);
+      alert('Gagal memproses gambar: ' + error.message);
+    } finally {
+      setUploadLoading(false);
+      e.target.value = ''; // allow re-upload of same file
+    }
+  };
+
+  const parseMenuWithAI = async (ocrText: string): Promise<any[]> => {
+    const prompt = `Extract menu items from the following OCR text. Return a JSON array of objects with these exact fields:
+  - name (string, required)
+  - description (string, can be empty)
+  - price (number, if missing set to 0)
+  - category (string, e.g. "Appetizer", "Main Course", "Makanan Pembuka", "Minuman")
+  - tags (array of strings, e.g. ["pedas", "vegetarian"])
+
+  Only include items that are clearly dishes. If the text contains multiple sections, merge them. Return **only** the JSON array, no explanation or markdown.
+
+  Examples:
+  Input: "APPETIZERS\\nSpring Rolls ........ 5.99\\nCrispy fried spring rolls"
+  Output: [{"name":"Spring Rolls","description":"Crispy fried spring rolls","price":5.99,"category":"Appetizer","tags":[]}]
+
+  Input: "MAKANAN UTAMA\\nNasi Goreng .......... 8.50\\nNasi goreng dengan ayam dan udang"
+  Output: [{"name":"Nasi Goreng","description":"Nasi goreng dengan ayam dan udang","price":8.50,"category":"Makanan Utama","tags":[]}]
+
+  OCR text:
+  """${ocrText}"""`;
+
+    const response = await fetch('https://fatmagician-megan-ai.hf.space/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: prompt, context: '' })
+    });
+
+    if (!response.ok) throw new Error('Gagal menghubungi AI');
+
+    const data = await response.json();
+    console.log('AI raw response:', data.response); // Debug log
+
+    let jsonText = data.response;
+
+    // Remove markdown code fences if present
+    const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) jsonText = jsonMatch[1];
+
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        // Try to find an array property (e.g., { items: [...] })
+        const possibleArray = Object.values(parsed).find(Array.isArray);
+        if (possibleArray) return possibleArray;
+      }
+      console.warn('AI response is not an array:', parsed);
+      return [];
+    } catch (e) {
+      console.error('Invalid AI response:', jsonText);
+      return []; // Return empty array instead of throwing
     }
   };
 
@@ -428,6 +617,278 @@ export default function MenuPage() {
     );
   }
 
+  const saveSingleMenuItem = async (item: MenuItem): Promise<void> => {
+    // Map category_name to existing category_id if possible
+    let categoryId = item.category_id;
+    const categoryName = item.category_name; // capture in constant
+    if (!categoryId && categoryName) {
+      const matched = categories.find(c => c.name.toLowerCase() === categoryName.toLowerCase());
+      categoryId = matched?.id || '';
+    }
+
+    const itemData = {
+      name: item.name,
+      description: item.description,
+      price: item.price,
+      cost_price: item.cost_price || 0,
+      sku: item.sku || `SKU-${Date.now().toString().slice(-6)}`,
+      is_available: item.is_available,
+      is_featured: item.is_featured,
+      image_url: item.image_url || '',
+      preparation_time: item.preparation_time || 0,
+      category_id: categoryId,
+      tags: item.tags || [],
+      user_id: ownerId,
+    };
+
+    const { error } = await supabase
+      .from('menu_items')
+      .insert(itemData);
+
+    if (error) throw error;
+  };
+
+  const handleBulkSave = async () => {
+    try {
+      for (const item of unsavedItems) {
+        await saveSingleMenuItem(item);
+      }
+      setShowBulkModal(false);
+      setUnsavedItems([]);
+      fetchData(); // refresh menu list
+      alert('Semua item berhasil ditambahkan');
+    } catch (error) {
+      console.error('Error saving bulk items:', error);
+      alert('Gagal menyimpan beberapa item. Silakan coba lagi.');
+    }
+  };
+
+  const BulkMenuImportModal = ({
+    items,
+    setItems,
+    activeIndex,
+    setActiveIndex,
+    categories,
+    inventoryItems,
+    canUseGramasi,
+    onClose,
+    onSave
+  }: {
+    items: MenuItem[];
+    setItems: (items: MenuItem[]) => void;
+    activeIndex: number;
+    setActiveIndex: (index: number) => void;
+    categories: Category[];
+    inventoryItems: InventoryItem[];
+    canUseGramasi: boolean;
+    onClose: () => void;
+    onSave: () => Promise<void>;
+  }) => {
+    if (items.length === 0) {
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6">
+            <p className="text-center">Tidak ada item untuk ditampilkan.</p>
+            <button onClick={onClose} className="mt-4 px-4 py-2 bg-primary text-white rounded-lg">
+              Tutup
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    const currentItem = items[activeIndex];
+    // If activeIndex is out of bounds (shouldn't happen, but safeguard)
+    if (!currentItem) {
+      return null;
+    }
+
+    const updateCurrentItem = (updates: Partial<MenuItem>) => {
+      const newItems = [...items];
+      newItems[activeIndex] = { ...newItems[activeIndex], ...updates };
+      setItems(newItems);
+    };
+
+    const addNewItem = () => {
+      const newItem: MenuItem = {
+        id: `temp-${Date.now()}-${Math.random()}`,
+        name: '',
+        description: '',
+        price: 0,
+        cost_price: 0,
+        sku: '',
+        is_available: true,
+        is_featured: false,
+        image_url: '',
+        preparation_time: 0,
+        category_id: '',
+        category_name: '',
+        tags: [],
+      };
+      setItems([...items, newItem]);
+      setActiveIndex(items.length); // go to new item
+    };
+
+    const removeCurrentItem = () => {
+      if (items.length === 1) {
+        alert('Setidaknya harus ada satu item');
+        return;
+      }
+      const newItems = items.filter((_, i) => i !== activeIndex);
+      setItems(newItems);
+      setActiveIndex(Math.min(activeIndex, newItems.length - 1));
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Tambah Item dari Menu</h2>
+              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">✕</button>
+            </div>
+
+            {/* Navigation */}
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => setActiveIndex(Math.max(0, activeIndex - 1))}
+                disabled={activeIndex === 0}
+                className="p-2 disabled:opacity-50"
+              >
+                <ChevronLeftIcon className="w-5 h-5" />
+              </button>
+              <span className="text-sm text-gray-600">
+                Item {activeIndex + 1} dari {items.length}
+              </span>
+              <button
+                onClick={() => setActiveIndex(Math.min(items.length - 1, activeIndex + 1))}
+                disabled={activeIndex === items.length - 1}
+                className="p-2 disabled:opacity-50"
+              >
+                <ChevronRightIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form Fields */}
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Nama Item *</label>
+                <input
+                  type="text"
+                  required
+                  value={currentItem.name}
+                  onChange={(e) => updateCurrentItem({ name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Deskripsi</label>
+                <textarea
+                  value={currentItem.description}
+                  onChange={(e) => updateCurrentItem({ description: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Harga *</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="100"
+                  required
+                  value={currentItem.price}
+                  onChange={(e) => updateCurrentItem({ price: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Kategori</label>
+                <select
+                  value={currentItem.category_id}
+                  onChange={(e) => updateCurrentItem({ category_id: e.target.value, category_name: '' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="">Pilih Kategori</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                {(() => {
+                  const categoryName = currentItem.category_name;
+                  return !currentItem.category_id && categoryName ? (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Deteksi AI: "{categoryName}" (pilih dari daftar)
+                    </p>
+                  ) : null;
+                })()}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Tags (pisahkan dengan koma)</label>
+                <input
+                  type="text"
+                  value={currentItem.tags?.join(', ')}
+                  onChange={(e) => updateCurrentItem({
+                    tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean)
+                  })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="pedas, vegetarian, bestseller"
+                />
+              </div>
+
+              {/* Gramasi / Recipe (Enterprise only) */}
+              {canUseGramasi && (
+                <div className="border-t pt-4">
+                  <h3 className="text-lg font-medium mb-2">Resep / Gramasi</h3>
+                  {/* You can reuse the recipe logic from the single-item modal here */}
+                  <p className="text-sm text-gray-500">Fitur gramasi dapat ditambahkan nanti.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-between mt-6 pt-4 border-t">
+              <button
+                type="button"
+                onClick={removeCurrentItem}
+                className="px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50"
+              >
+                Hapus Item Ini
+              </button>
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={addNewItem}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  + Tambah Item Manual
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={onSave}
+                  className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+                >
+                  Tambah Item-Item ({items.length})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-7xl mx-auto py-8 px-4">
       <div className="mb-8">
@@ -520,7 +981,21 @@ export default function MenuPage() {
                 </option>
               ))}
             </select>
-
+            <button
+              onClick={() => document.getElementById('menu-image-upload')?.click()}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center"
+              disabled={uploadLoading}
+            >
+              <DocumentArrowUpIcon className="w-5 h-5 mr-2" />
+              {uploadLoading ? 'Memproses...' : 'Upload Menu (Foto)'}
+            </button>
+            <input
+              id="menu-image-upload"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageUpload}
+            />
             <button
               onClick={() => {
                 setEditingItem(null);
@@ -1033,6 +1508,20 @@ export default function MenuPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showBulkModal && (
+        <BulkMenuImportModal
+          items={unsavedItems}
+          setItems={setUnsavedItems}
+          activeIndex={activeItemIndex}
+          setActiveIndex={setActiveItemIndex}
+          categories={categories}
+          inventoryItems={inventoryItems}
+          canUseGramasi={canUseGramasi}
+          onClose={() => setShowBulkModal(false)}
+          onSave={handleBulkSave}
+        />
       )}
     </div>
   );
