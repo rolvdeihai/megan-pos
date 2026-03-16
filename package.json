@@ -25,6 +25,7 @@
     "react-hot-toast": "^2.4.0",
     "react-qr-code": "^2.0.18",
     "recharts": "^3.7.0",
+    "tesseract.js": "^7.0.0",
     "xendit-node": "^7.0.0"
   },
   "devDependencies": {

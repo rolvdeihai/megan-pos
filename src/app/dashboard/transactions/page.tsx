@@ -14,6 +14,23 @@ import {
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { DocumentArrowUpIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import Tesseract from 'tesseract.js';
+
+type ParsedExpenseItem = {
+  amount: number;
+  category?: string;
+  payment_method?: string;
+  notes?: string;
+};
+
+type TempExpenseItem = {
+  id: string;
+  amount: number;
+  payment_method: string;
+  expense_category: string;
+  notes: string;
+};
 
 type Transaction = {
   id: string;
@@ -68,6 +85,11 @@ export default function TransactionsPage() {
   const [modalType, setModalType] = useState<'expense' | 'refund'>('expense');
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
+  const [unsavedExpenses, setUnsavedExpenses] = useState<TempExpenseItem[]>([]);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [activeExpenseIndex, setActiveExpenseIndex] = useState(0);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -87,6 +109,363 @@ export default function TransactionsPage() {
       fetchPaidOrders(); // Fetch orders for refund selection
     }
   }, [startDate, endDate, paymentMethod, transactionType, user]);
+
+  const splitTextIntoChunks = (text: string, maxCharsPerChunk: number): string[] => {
+    const lines = text.split('\n');
+    const chunks: string[] = [];
+    let currentChunk = '';
+
+    for (const line of lines) {
+      if (line.length > maxCharsPerChunk) {
+        if (currentChunk) {
+          chunks.push(currentChunk);
+          currentChunk = '';
+        }
+        for (let i = 0; i < line.length; i += maxCharsPerChunk) {
+          chunks.push(line.slice(i, i + maxCharsPerChunk));
+        }
+        continue;
+      }
+
+      if ((currentChunk + '\n' + line).length > maxCharsPerChunk) {
+        chunks.push(currentChunk);
+        currentChunk = line;
+      } else {
+        currentChunk = currentChunk ? currentChunk + '\n' + line : line;
+      }
+    }
+
+    if (currentChunk) {
+      chunks.push(currentChunk);
+    }
+    return chunks;
+  };
+
+  const parseExpenseWithAI = async (ocrText: string): Promise<ParsedExpenseItem[]> => {
+    const prompt = `Extract expense items from the following receipt/invoice text. Return a JSON array of objects with these exact fields:
+  - amount (number, required) - the total amount paid
+  - category (string, optional) - e.g. "Bahan Baku", "Operasional", "Listrik", "Sewa", "Gaji", "Marketing", "Pemeliharaan", "Lainnya"
+  - payment_method (string, optional) - e.g. "cash", "card", "qris", "transfer"
+  - notes (string, optional) - any additional description
+
+  Only include items that are clearly expenses (purchases, bills). If the text contains multiple line items, you may combine them into one expense or split if they are separate transactions. Return **only** the JSON array, no explanation or markdown.
+
+  Examples:
+  Input: "Toko Maju Jaya\nBeras 5kg - 60.000\nMinyak 2L - 30.000\nTotal 90.000\nCash"
+  Output: [{"amount":90000,"category":"Bahan Baku","payment_method":"cash","notes":"Pembelian beras dan minyak"}]
+
+  Input: "PLN bulan Januari 2024\nBiaya listrik 450.000\nTransfer BCA"
+  Output: [{"amount":450000,"category":"Listrik","payment_method":"transfer","notes":"Listrik Jan 2024"}]
+
+  OCR text:
+  """${ocrText}"""`;
+
+    const response = await fetch('https://fatmagician-megan-ai.hf.space/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: prompt, context: '' })
+    });
+
+    if (!response.ok) throw new Error('Gagal menghubungi AI');
+
+    const data = await response.json();
+    let jsonText = data.response;
+
+    const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) jsonText = jsonMatch[1];
+
+    try {
+      const parsed = JSON.parse(jsonText);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.error('Invalid AI response:', jsonText);
+      return [];
+    }
+  };
+
+  const handleExpenseImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadLoading(true);
+    setOcrError(null);
+
+    try {
+      const { data: { text } } = await Tesseract.recognize(file, 'eng', {
+        logger: m => console.log(m)
+      });
+
+      if (!text.trim()) throw new Error('Tidak ada teks yang terdeteksi');
+      console.log('OCR text:', text);
+
+      const MAX_CHARS_PER_CHUNK = 800;
+      const chunks = splitTextIntoChunks(text, MAX_CHARS_PER_CHUNK);
+      console.log(`Splitting OCR text into ${chunks.length} chunks`);
+
+      let allParsedItems: ParsedExpenseItem[] = [];
+      const MAX_CHUNKS = 5;
+
+      for (let i = 0; i < Math.min(chunks.length, MAX_CHUNKS); i++) {
+        try {
+          const parsed = await parseExpenseWithAI(chunks[i]);
+          allParsedItems = [...allParsedItems, ...parsed];
+        } catch (error) {
+          console.error(`Error parsing chunk ${i + 1}:`, error);
+        }
+      }
+
+      // Convert to temporary TempExpenseItem objects
+      const newUnsavedExpenses = allParsedItems.map((item, index) => ({
+        id: `temp-${Date.now()}-${index}-${Math.random()}`,
+        amount: item.amount || 0,
+        payment_method: item.payment_method || 'cash',
+        expense_category: item.category || 'operational',
+        notes: item.notes || '',
+      }));
+
+      if (newUnsavedExpenses.length === 0) {
+        const blankExpense: TempExpenseItem = {
+          id: `temp-${Date.now()}-${Math.random()}`,
+          amount: 0,
+          payment_method: 'cash',
+          expense_category: 'operational',
+          notes: '',
+        };
+        setUnsavedExpenses([blankExpense]);
+      } else {
+        setUnsavedExpenses(newUnsavedExpenses);
+      }
+
+      setShowBulkModal(true);
+      setActiveExpenseIndex(0);
+    } catch (error: any) {
+      console.error(error);
+      alert('Gagal memproses gambar: ' + error.message);
+    } finally {
+      setUploadLoading(false);
+      e.target.value = '';
+    }
+  };
+
+  const saveSingleExpenseItem = async (item: TempExpenseItem): Promise<void> => {
+    if (!user) throw new Error('User tidak terautentikasi');
+    const ownerId = user.user_type === 'staff' ? user.user_id : user.id;
+    const transactionNumber = `EXP-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5)}`;
+
+    const transactionData = {
+      user_id: ownerId,
+      transaction_number: transactionNumber,
+      type: 'expense',
+      amount: item.amount,
+      payment_method: item.payment_method,
+      status: 'completed',
+      notes: `${item.expense_category}: ${item.notes || 'Tidak ada catatan'}`,
+    };
+
+    const { error } = await supabase
+      .from('transactions')
+      .insert(transactionData);
+
+    if (error) throw error;
+  };
+
+  const handleBulkSaveExpenses = async () => {
+    try {
+      for (const expense of unsavedExpenses) {
+        await saveSingleExpenseItem(expense);
+      }
+      setShowBulkModal(false);
+      setUnsavedExpenses([]);
+      fetchTransactions(); // refresh table
+      alert('Semua pengeluaran berhasil ditambahkan');
+    } catch (error) {
+      console.error('Error saving bulk expenses:', error);
+      alert('Gagal menyimpan beberapa pengeluaran. Silakan coba lagi.');
+    }
+  };
+
+  const BulkExpenseImportModal = ({
+    items,
+    setItems,
+    activeIndex,
+    setActiveIndex,
+    onClose,
+    onSave
+  }: {
+    items: TempExpenseItem[];
+    setItems: (items: TempExpenseItem[]) => void;
+    activeIndex: number;
+    setActiveIndex: (index: number) => void;
+    onClose: () => void;
+    onSave: () => Promise<void>;
+  }) => {
+    if (items.length === 0) {
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6">
+            <p className="text-center">Tidak ada item untuk ditampilkan.</p>
+            <button onClick={onClose} className="mt-4 px-4 py-2 bg-primary text-white rounded-lg">
+              Tutup
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    const currentItem = items[activeIndex];
+    if (!currentItem) return null;
+
+    const updateCurrentItem = (updates: Partial<TempExpenseItem>) => {
+      const newItems = [...items];
+      newItems[activeIndex] = { ...newItems[activeIndex], ...updates };
+      setItems(newItems);
+    };
+
+    const addNewItem = () => {
+      const newItem: TempExpenseItem = {
+        id: `temp-${Date.now()}-${Math.random()}`,
+        amount: 0,
+        payment_method: 'cash',
+        expense_category: 'operational',
+        notes: '',
+      };
+      setItems([...items, newItem]);
+      setActiveIndex(items.length);
+    };
+
+    const removeCurrentItem = () => {
+      if (items.length === 1) {
+        alert('Setidaknya harus ada satu item');
+        return;
+      }
+      const newItems = items.filter((_, i) => i !== activeIndex);
+      setItems(newItems);
+      setActiveIndex(Math.min(activeIndex, newItems.length - 1));
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Tambah Pengeluaran dari Nota</h2>
+              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">✕</button>
+            </div>
+
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => setActiveIndex(Math.max(0, activeIndex - 1))}
+                disabled={activeIndex === 0}
+                className="p-2 disabled:opacity-50"
+              >
+                <ChevronLeftIcon className="w-5 h-5" />
+              </button>
+              <span className="text-sm text-gray-600">
+                Item {activeIndex + 1} dari {items.length}
+              </span>
+              <button
+                onClick={() => setActiveIndex(Math.min(items.length - 1, activeIndex + 1))}
+                disabled={activeIndex === items.length - 1}
+                className="p-2 disabled:opacity-50"
+              >
+                <ChevronRightIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Jumlah (Rp) *</label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="100"
+                  value={currentItem.amount}
+                  onChange={(e) => updateCurrentItem({ amount: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Kategori Pengeluaran</label>
+                <select
+                  value={currentItem.expense_category}
+                  onChange={(e) => updateCurrentItem({ expense_category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="operational">Operasional</option>
+                  <option value="ingredients">Bahan Baku</option>
+                  <option value="utilities">Listrik/Air/Internet</option>
+                  <option value="salary">Gaji Karyawan</option>
+                  <option value="rent">Sewa Tempat</option>
+                  <option value="marketing">Marketing</option>
+                  <option value="maintenance">Pemeliharaan</option>
+                  <option value="other">Lainnya</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Metode Pembayaran</label>
+                <select
+                  value={currentItem.payment_method}
+                  onChange={(e) => updateCurrentItem({ payment_method: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="qris">QRIS</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Catatan</label>
+                <textarea
+                  value={currentItem.notes}
+                  onChange={(e) => updateCurrentItem({ notes: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="Contoh: Beli bahan baku bulanan"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-between mt-6 pt-4 border-t">
+              <button
+                type="button"
+                onClick={removeCurrentItem}
+                className="px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50"
+              >
+                Hapus Item Ini
+              </button>
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={addNewItem}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  + Tambah Item Manual
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={onSave}
+                  className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+                >
+                  Tambah Item-Item ({items.length})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const fetchTransactions = async () => {
     if (!user?.id) return;
@@ -479,6 +858,22 @@ export default function TransactionsPage() {
                 <ReceiptRefundIcon className="w-5 h-5 mr-2" />
                 Tambah Refund
               </button>
+              {/* New upload button */}
+              <button
+                onClick={() => document.getElementById('expense-image-upload')?.click()}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center"
+                disabled={uploadLoading}
+              >
+                <DocumentArrowUpIcon className="w-5 h-5 mr-2" />
+                {uploadLoading ? 'Memproses...' : 'Upload Nota (Foto)'}
+              </button>
+              <input
+                id="expense-image-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleExpenseImageUpload}
+              />
             </div>
             <button
               onClick={exportToCSV}
@@ -929,6 +1324,16 @@ export default function TransactionsPage() {
             </div>
           </div>
         </div>
+      )}
+      {showBulkModal && (
+        <BulkExpenseImportModal
+          items={unsavedExpenses}
+          setItems={setUnsavedExpenses}
+          activeIndex={activeExpenseIndex}
+          setActiveIndex={setActiveExpenseIndex}
+          onClose={() => setShowBulkModal(false)}
+          onSave={handleBulkSaveExpenses}
+        />
       )}
     </div>
   );
