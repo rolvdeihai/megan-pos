@@ -22,6 +22,7 @@ interface Table {
   table_number: string;
   table_name?: string;
   capacity: number;
+  is_available?: boolean; // add this line
 }
 
 interface OrderModalProps {
@@ -61,6 +62,7 @@ export default function OrderModal({
   const [notes, setNotes] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
+  const [selectedTime, setSelectedTime] = useState<string>('');
 
   const filteredItems = selectedCategoryId === 'all'
     ? menuItems
@@ -146,9 +148,10 @@ export default function OrderModal({
       order_type: orderType,
       table_id: orderType === 'dine_in' ? selectedTable : null,
       customer_name: customerName,
-      customer_phone: customerPhone && customerPhone.trim() !== '' ? customerPhone : null,  // ✅
+      customer_phone: customerPhone && customerPhone.trim() !== '' ? customerPhone : null,
       delivery_address: orderType === 'delivery' ? deliveryAddress : null,
       notes,
+      scheduled_time: orderType === 'dine_in' ? (selectedTime || new Date().toISOString().slice(0, 16)) : null,
       items: cart.map(item => ({
         id: item.id,
         name: item.name,
@@ -212,30 +215,51 @@ export default function OrderModal({
               {/* Order Details */}
               <div className="mb-6 space-y-4">
                 {orderType === 'dine_in' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Pilih Meja
-                    </label>
-                    {tables.length === 0 ? (
-                      <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
-                        Tidak ada meja yang tersedia. Harap tambahkan meja di menu Kelola Meja, atau selesaikan pesanan dine-in yang sedang aktif.
-                      </div>
-                    ) : (
-                      <select
-                        value={selectedTable}
-                        onChange={(e) => setSelectedTable(e.target.value)}
+                  <>
+                    {/* Table selection (existing code) */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Pilih Meja
+                      </label>
+                      {tables.length === 0 ? (
+                        <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
+                          Tidak ada meja yang tersedia. Harap tambahkan meja di menu Kelola Meja, atau selesaikan pesanan dine-in yang sedang aktif.
+                        </div>
+                      ) : (
+                        <select
+                          value={selectedTable}
+                          onChange={(e) => setSelectedTable(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
+                          required
+                        >
+                          <option value="">Pilih Meja</option>
+                          {tables.map(table => (
+                            <option
+                              key={table.id}
+                              value={table.id}
+                              disabled={!table.is_available}
+                            >
+                              {table.table_name || `Meja ${table.table_number}`} (Max {table.capacity} orang)
+                              {!table.is_available && ' - Tidak Tersedia'}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+
+                    {/* Scheduled time picker */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Waktu Reservasi (opsional, default sekarang)
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={selectedTime}
+                        onChange={(e) => setSelectedTime(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
-                        required
-                      >
-                        <option value="">Pilih Meja</option>
-                        {tables.map(table => (
-                          <option key={table.id} value={table.id}>
-                            {table.table_name || `Meja ${table.table_number}`} (Max {table.capacity} orang)
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
+                      />
+                    </div>
+                  </>
                 )}
 
                 {(orderType === 'takeaway' || orderType === 'delivery') && (

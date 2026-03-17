@@ -9,6 +9,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { getOwnerId } from '@/lib/user-scope';
 import { filterOrdersByTab, summarizeOrderTabs } from '@/lib/orders-dashboard-utils';
 import { sendOrderEmail } from '@/lib/email-service';
+import { checkTableConflict } from '@/lib/table-availability';
 
 type Order = {
   id: string;
@@ -22,6 +23,7 @@ type Order = {
   payment_status: string;
   created_at: string;
   items_count?: number;
+  scheduled_time?: string | null; // add this line
 };
 
 export default function OrdersPage() {
@@ -90,7 +92,6 @@ export default function OrdersPage() {
         .from('restaurant_tables')
         .select('*')
         .eq('user_id', ownerId)
-        .eq('is_available', true)
         .order('table_number');
 
       if (tablesError) {
@@ -144,7 +145,7 @@ export default function OrdersPage() {
 
   const createOrder = async (orderData: any) => {
     if (!ownerId || !user) return;
-    
+
     // Prevent duplicate submission
     if (isSubmitting) return;
     setIsSubmitting(true);
@@ -167,39 +168,57 @@ export default function OrdersPage() {
         if (confirm('Batas maksimum 100 transaksi/bulan untuk paket Basic telah tercapai. Apakah Anda ingin meng-upgrade paket?')) {
           router.push('/dashboard/billing');
         }
+        setIsSubmitting(false);
         return;
       }
     }
     // ---------------------------------
 
-    // FIX: Pisahkan 'items' dari data order utama, karena 'items' tidak ada di tabel 'orders'
+    // Extract items and the rest of the order fields from the parameter
     const { items, ...orderFields } = orderData;
 
-    // Generate unique order number with random suffix to prevent collisions
+    // Check table conflict for dine‑in
+    if (orderFields.order_type === 'dine_in' && orderFields.table_id && orderFields.scheduled_time) {
+      // Convert local datetime (YYYY-MM-DDTHH:mm) to UTC ISO string
+      const scheduledTimeUTC = new Date(orderFields.scheduled_time).toISOString();
+      const hasConflict = await checkTableConflict(
+        ownerId,
+        orderFields.table_id,
+        scheduledTimeUTC
+      );
+      if (hasConflict) {
+        alert('Meja yang dipilih sudah dipesan pada waktu tersebut. Silakan pilih waktu lain atau meja lain.');
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
+    // Generate unique order number
     const orderNumber = `ORD-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
 
-    const subtotal = items.reduce((sum: number, item: any) =>
-      sum + (item.price * item.quantity), 0);
+    // Calculate financials
+    const subtotal = items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
 
     // Fetch tax, service charge, and delivery fee from restaurant settings
-    const { data: settings } = await supabase
+    const { data: settingsData } = await supabase
       .from('restaurant_settings')
       .select('tax_percentage, service_charge_percentage, delivery_fee')
       .eq('user_id', ownerId)
       .single();
 
-    const taxPercentage = settings?.tax_percentage ?? 10;
-    const serviceChargePercentage = settings?.service_charge_percentage ?? 0;
-    const deliveryFee = orderFields.order_type === 'delivery' ? (settings?.delivery_fee ?? 0) : 0;
-    
+    const taxPercentage = settingsData?.tax_percentage ?? 10;
+    const serviceChargePercentage = settingsData?.service_charge_percentage ?? 0;
+    const deliveryFee = orderFields.order_type === 'delivery' ? (settingsData?.delivery_fee ?? 0) : 0;
+
     const taxAmount = subtotal * (taxPercentage / 100);
     const serviceChargeAmount = subtotal * (serviceChargePercentage / 100);
     const totalAmount = subtotal + taxAmount + serviceChargeAmount + deliveryFee;
 
-    const { data, error } = await supabase
+    // Insert the order
+    const { data: newOrder, error } = await supabase
       .from('orders')
       .insert({
-        ...orderFields, // Masukkan field lain (table_id, customer_name, dll) kecuali items
+        ...orderFields,               // contains table_id, customer_name, scheduled_time, etc.
         order_number: orderNumber,
         user_id: ownerId,
         status: 'pending',
@@ -217,46 +236,39 @@ export default function OrdersPage() {
       .select()
       .single();
 
-    if (!error && data) {
-      // Insert order items ke tabel terpisah
-      const orderItems = items.map((item: any) => ({
-        order_id: data.id,
-        menu_item_id: item.id,
-        quantity: item.quantity,
-        unit_price: item.price,
-        total_price: item.price * item.quantity,
-        special_instructions: item.special_instructions,
-      }));
-
-      await supabase.from('order_items').insert(orderItems);
-
-      // Update table availability if dine-in
-      if (orderFields.order_type === 'dine_in' && orderFields.table_id) {
-        await supabase
-          .from('restaurant_tables')
-          .update({ is_available: false })
-          .eq('id', orderFields.table_id);
-      }
-
-      // Send email notification to owner
-      if (user?.email) {
-        await sendOrderEmail({
-          email: user.email,
-          orderNumber: orderNumber,
-          customerName: orderFields.customer_name || 'Tanpa nama',
-          totalAmount: totalAmount,
-          items: items.map((item: any) => `${item.name} x${item.quantity}`),
-        });
-      }
-    
-
-      fetchData();
-      setShowOrderModal(false);
-    } else {
+    if (error) {
       console.error('Error creating order:', error);
       alert('Gagal membuat order: ' + (error?.message || 'Unknown error'));
+      setIsSubmitting(false);
+      return;
     }
-    
+
+    // Insert order items
+    const orderItems = items.map((item: any) => ({
+      order_id: newOrder.id,
+      menu_item_id: item.id,
+      quantity: item.quantity,
+      unit_price: item.price,
+      total_price: item.price * item.quantity,
+      special_instructions: item.special_instructions,
+    }));
+
+    await supabase.from('order_items').insert(orderItems);
+
+    // Send email notification to owner
+    if (user?.email) {
+      await sendOrderEmail({
+        email: user.email,
+        orderNumber: orderNumber,
+        customerName: orderFields.customer_name || 'Tanpa nama',
+        totalAmount: totalAmount,
+        items: items.map((item: any) => `${item.name} x${item.quantity}`),
+      });
+    }
+
+    // Refresh data and close modal
+    await fetchData();
+    setShowOrderModal(false);
     setIsSubmitting(false);
   };
 
@@ -269,6 +281,37 @@ export default function OrdersPage() {
 
     // Close the invoice modal after user acknowledges the popup
     setShowInvoiceModal(false);
+  };
+
+  const deleteOrder = async (orderId: string, orderNumber: string) => {
+    if (!confirm(`Yakin ingin membatalkan dan menghapus order ${orderNumber}?`)) {
+      return;
+    }
+
+    try {
+      // First delete related order_items (foreign key constraint)
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .delete()
+        .eq('order_id', orderId);
+
+      if (itemsError) throw itemsError;
+
+      // Then delete the order itself
+      const { error: orderError } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId);
+
+      if (orderError) throw orderError;
+
+      // Refresh data
+      await fetchData();
+      alert(`Order ${orderNumber} berhasil dibatalkan.`);
+    } catch (error: any) {
+      console.error('Error deleting order:', error);
+      alert('Gagal menghapus order: ' + error.message);
+    }
   };
 
   // Tampilkan loading jika auth masih loading
@@ -388,6 +431,11 @@ export default function OrdersPage() {
                 <p className="text-sm text-gray-600 mt-2">
                   Tanggal: {new Date(order.created_at).toLocaleDateString('id-ID')}
                 </p>
+                {order.order_type === 'dine_in' && order.scheduled_time && (
+                  <p className="text-sm text-gray-600">
+                    Waktu reservasi: {new Date(order.scheduled_time).toLocaleString('id-ID')}
+                  </p>
+                )}
               </div>
 
               <div className="flex space-x-2">
@@ -400,6 +448,17 @@ export default function OrdersPage() {
                 >
                   Lihat Detail
                 </button>
+                {order.status !== 'completed' && (
+                  <button
+                    onClick={() => deleteOrder(order.id, order.order_number)}
+                    className="px-3 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                    title="Batalkan dan hapus order"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+                )}
               </div>
             </div>
           ))}
