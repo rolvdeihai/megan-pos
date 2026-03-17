@@ -7,6 +7,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/layout/Navbar';
 import { sendOrderEmail } from '@/lib/email-service';
+import { checkTableConflict } from '@/lib/table-availability';
 
 interface MenuItem {
   id: string;
@@ -38,6 +39,7 @@ export default function PublicOrderPage() {
   const [orderSubmitted, setOrderSubmitted] = useState(false);
   const [orderNumber, setOrderNumber] = useState<string>('');
   const [orderData, setOrderData] = useState<any>(null); // Store full order data
+  const [selectedTime, setSelectedTime] = useState<string>('');
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -50,6 +52,25 @@ export default function PublicOrderPage() {
       loadCartFromStorage();
     }
   }, [slug]);
+
+  useEffect(() => {
+    if (tableParam && tables.length > 0) {
+      const matchedTable = tables.find(
+        (t) => t.table_number === tableParam || t.table_name === tableParam
+      );
+      if (matchedTable) {
+        setSelectedTable(matchedTable.id);
+        // Auto‑set time to current local datetime
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        setSelectedTime(`${year}-${month}-${day}T${hours}:${minutes}`);
+      }
+    }
+  }, [tableParam, tables]);
 
   const fetchData = async () => {
     if (!slug) return;
@@ -136,7 +157,8 @@ export default function PublicOrderPage() {
           .from('restaurant_tables')
           .select('*')
           .eq('user_id', userId) // Gunakan userId dari restaurant
-          .eq('is_available', true);
+          // .eq('is_available', true)  // <-- REMOVE THIS LINE
+          .order('table_number');
 
         if (tablesError) {
           console.error('Error fetching tables:', tablesError);
@@ -235,9 +257,20 @@ export default function PublicOrderPage() {
       return;
     }
 
-    if (orderType === 'dine_in' && !selectedTable) {
-      alert('Pilih meja untuk order dine-in');
-      return;
+    // --- Dine-in specific validations ---
+    if (orderType === 'dine_in') {
+      if (!selectedTable) {
+        alert('Pilih meja untuk order dine-in');
+        return;
+      }
+      if (!tableParam && !selectedTime) {
+        alert('Pilih waktu reservasi');
+        return;
+      }
+      if (!customerPhone) {
+        alert('Nomor telepon wajib diisi untuk reservasi');
+        return;
+      }
     }
 
     if (orderType === 'delivery' && (!customerPhone || !deliveryAddress)) {
@@ -246,6 +279,30 @@ export default function PublicOrderPage() {
     }
 
     try {
+      // Convert scheduled_time to UTC for conflict check and storage
+      let scheduledTimeUTC = null;
+      if (orderType === 'dine_in') {
+        if (selectedTime) {
+          scheduledTimeUTC = new Date(selectedTime).toISOString();
+        } else {
+          // Default to now (e.g., when table param is used)
+          scheduledTimeUTC = new Date().toISOString();
+        }
+      }
+
+      // Conflict check for dine-in
+      if (orderType === 'dine_in' && selectedTable && scheduledTimeUTC) {
+        const hasConflict = await checkTableConflict(
+          restaurant.id,
+          selectedTable,
+          scheduledTimeUTC
+        );
+        if (hasConflict) {
+          alert('Meja yang dipilih sudah dipesan pada waktu tersebut. Silakan pilih waktu lain atau meja lain.');
+          return;
+        }
+      }
+
       // Generate order number
       const generatedOrderNumber = `ORD-${Date.now().toString().slice(-6)}`;
 
@@ -276,6 +333,7 @@ export default function PublicOrderPage() {
         total_amount: totalAmount,
         payment_status: 'pending',
         notes,
+        scheduled_time: scheduledTimeUTC, // store UTC timestamp
       };
 
       const { data: order, error } = await supabase
@@ -298,21 +356,13 @@ export default function PublicOrderPage() {
 
       await supabase.from('order_items').insert(orderItems);
 
-      // Update table availability if dine-in
-      if (orderType === 'dine_in' && selectedTable) {
-        await supabase
-          .from('restaurant_tables')
-          .update({ is_available: false })
-          .eq('id', selectedTable);
-      }
-
       // Clear cart
       setCart([]);
       saveCartToStorage([]);
 
       // Show success message
       setOrderNumber(generatedOrderNumber);
-      setOrderData(order); // Save order data
+      setOrderData(order);
       setOrderSubmitted(true);
 
       // Send email notification to owner
@@ -321,12 +371,11 @@ export default function PublicOrderPage() {
           email: restaurant.email,
           orderNumber: generatedOrderNumber,
           customerName: customerName || 'Tanpa nama',
-          totalAmount: calculateTotal(),
+          totalAmount: totalAmount,
           items: cart.map((item) => `${item.name} x${item.quantity}`),
         });
       }
 
-      // Send notification (simulated)
       sendNotification(order);
 
     } catch (error: any) {
@@ -537,25 +586,59 @@ export default function PublicOrderPage() {
 
               {/* Order Details */}
               <div className="space-y-6">
-                {orderType === 'dine_in' && tables.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Pilih Meja
-                    </label>
-                    <select
-                      value={selectedTable}
-                      onChange={(e) => setSelectedTable(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary"
-                      required
-                    >
-                      <option value="">Pilih Meja</option>
-                      {tables.map(table => (
-                        <option key={table.id} value={table.id}>
-                          {table.table_name || `Meja ${table.table_number}`} (Max {table.capacity} orang)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                {orderType === 'dine_in' && (
+                  <>
+                    {/* Table selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Pilih Meja
+                      </label>
+                      {tables.length === 0 ? (
+                        <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
+                          Tidak ada meja yang tersedia. Harap hubungi restoran.
+                        </div>
+                      ) : (
+                        <select
+                          value={selectedTable}
+                          onChange={(e) => setSelectedTable(e.target.value)}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary"
+                          required
+                        >
+                          <option value="">Pilih Meja</option>
+                          {tables.map(table => (
+                            <option
+                              key={table.id}
+                              value={table.id}
+                              disabled={!table.is_available}
+                            >
+                              {table.table_name || `Meja ${table.table_number}`} (Max {table.capacity} orang)
+                              {!table.is_available && ' - Tidak Tersedia'}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+
+                    {/* Scheduled time (keep as is) */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Waktu Reservasi
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={selectedTime}
+                        onChange={(e) => setSelectedTime(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary"
+                        required={!tableParam}
+                        min={new Date().toISOString().slice(0, 16)}
+                      />
+                      {tableParam && (
+                        <p className="text-sm text-gray-500 mt-1">
+                          Waktu reservasi diatur otomatis ke waktu sekarang.
+                        </p>
+                      )}
+                    </div>
+                  </>
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -9,6 +9,7 @@ import OrderModal from '@/components/orders/OrderModal';
 import { useAuth } from '@/components/auth/AuthProvider'; // Tambahkan ini
 import { getOwnerId } from '@/lib/user-scope';
 import { sendOrderEmail } from '@/lib/email-service';
+import { checkTableConflict } from '@/lib/table-availability';
 
 export default function NewOrderPage() {
   const router = useRouter();
@@ -119,6 +120,20 @@ export default function NewOrderPage() {
 
     const totalAmount = subtotal + taxAmount + serviceChargeAmount + deliveryFee;
 
+    // Check table conflict if dine-in
+    if (orderData.order_type === 'dine_in' && orderData.table_id && orderData.scheduled_time) {
+      const hasConflict = await checkTableConflict(
+        ownerId,
+        orderData.table_id,
+        orderData.scheduled_time
+      );
+      if (hasConflict) {
+        alert('Meja yang dipilih sudah dipesan pada waktu tersebut. Silakan pilih waktu lain atau meja lain.');
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     const { data, error } = await supabase
       .from('orders')
       .insert({
@@ -152,14 +167,6 @@ export default function NewOrderPage() {
       }));
 
       await supabase.from('order_items').insert(orderItems);
-
-      // Update table availability if dine-in
-      if (orderFields.order_type === 'dine_in' && orderFields.table_id) {
-        await supabase
-          .from('restaurant_tables')
-          .update({ is_available: false })
-          .eq('id', orderFields.table_id);
-      }
 
       // Send email notification to owner
       if (user?.email) {
