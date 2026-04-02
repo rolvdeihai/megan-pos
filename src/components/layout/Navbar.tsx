@@ -11,9 +11,11 @@ interface NavbarProps {
     mode: 'dashboard' | 'public';
     restaurant?: any; // For public mode
     settings?: any;   // For public mode
+    // Hide auth-related controls on public "landing/order" pages.
+    showAuthControls?: boolean;
 }
 
-export default function Navbar({ mode, restaurant, settings }: NavbarProps) {
+export default function Navbar({ mode, restaurant, settings, showAuthControls = true }: NavbarProps) {
     const pathname = usePathname();
     const { user, logout: ownerLogout } = useAuth();
     const { staff, logout: staffLogout } = useStaff();
@@ -98,60 +100,64 @@ export default function Navbar({ mode, restaurant, settings }: NavbarProps) {
                             </div>
                         </div>
 
-                        <div className="hidden md:flex items-center gap-3">
-                            {currentUser ? (
-                                <>
-                                    <Link
-                                        href="/dashboard"
-                                        className="px-3 py-2 text-sm font-semibold text-slate-700 hover:text-primary"
-                                    >
-                                        Dashboard
-                                    </Link>
-                                    <button
-                                        onClick={handleLogout}
-                                        className="px-3 py-2 text-sm font-semibold text-red-600 hover:text-red-700"
-                                    >
-                                        Logout
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    {restaurant?.restaurant_slug && (
+                        {showAuthControls && (
+                            <div className="hidden md:flex items-center gap-3">
+                                {currentUser ? (
+                                    <>
                                         <Link
-                                            href={`/${restaurant.restaurant_slug}/staff-login`}
+                                            href="/dashboard"
                                             className="px-3 py-2 text-sm font-semibold text-slate-700 hover:text-primary"
                                         >
-                                            Login Staff
+                                            Dashboard
                                         </Link>
-                                    )}
-                                    <Link
-                                        href="/login"
-                                        className="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-lg shadow-sm hover:bg-primary/90"
-                                    >
-                                        Masuk Owner
-                                    </Link>
-                                </>
-                            )}
-                        </div>
+                                        <button
+                                            onClick={handleLogout}
+                                            className="px-3 py-2 text-sm font-semibold text-red-600 hover:text-red-700"
+                                        >
+                                            Logout
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        {restaurant?.restaurant_slug && (
+                                            <Link
+                                                href={`/${restaurant.restaurant_slug}/staff-login`}
+                                                className="px-3 py-2 text-sm font-semibold text-slate-700 hover:text-primary"
+                                            >
+                                                Login Staff
+                                            </Link>
+                                        )}
+                                        <Link
+                                            href="/login"
+                                            className="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-lg shadow-sm hover:bg-primary/90"
+                                        >
+                                            Masuk Owner
+                                        </Link>
+                                    </>
+                                )}
+                            </div>
+                        )}
 
-                        <div className="md:hidden flex items-center">
-                            <button
-                                className="p-2 text-slate-600"
-                                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                            >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    {isMobileMenuOpen ? (
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    ) : (
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                                    )}
-                                </svg>
-                            </button>
-                        </div>
+                        {showAuthControls && (
+                            <div className="md:hidden flex items-center">
+                                <button
+                                    className="p-2 text-slate-600"
+                                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        {isMobileMenuOpen ? (
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        ) : (
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                                        )}
+                                    </svg>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {isMobileMenuOpen && (
+                {showAuthControls && isMobileMenuOpen && (
                     <div className="md:hidden border-t border-slate-200/70 bg-white/95 px-4 py-3 space-y-2">
                         {currentUser ? (
                             <>
@@ -198,7 +204,7 @@ export default function Navbar({ mode, restaurant, settings }: NavbarProps) {
     // Dashboard Mode
     return (
         <nav className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/90 backdrop-blur">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
                 <div className="flex justify-between h-16 items-center">
                     {/* Logo */}
                     <div className="flex items-center">
@@ -207,11 +213,10 @@ export default function Navbar({ mode, restaurant, settings }: NavbarProps) {
                         </Link>
 
                         {/* Desktop Menu */}
-                        <div className="hidden md:flex space-x-1">
+                        <div className="hidden xl:flex space-x-1">
                             {filteredLinks.map((link) => {
                                 const isActive = pathname === link.href || pathname?.startsWith(`${link.href}/`);
                                 
-                                // Special handling for Employees dropdown with hover (desktop) and click (mobile)
                                 if (link.href === '/dashboard/employees') {
                                     const isEmployeesSection = pathname === '/dashboard/employees' || 
                                         pathname === '/dashboard/attendance' || 
@@ -305,7 +310,7 @@ export default function Navbar({ mode, restaurant, settings }: NavbarProps) {
 
                     {/* User & Logout */}
                     <div className="flex items-center space-x-4">
-                        <div className="hidden md:flex flex-col items-end">
+                        <div className="hidden lg:flex flex-col items-end">
                             <span className="text-sm font-semibold text-slate-900">
                                 {currentUser?.full_name || 'User'}
                             </span>
@@ -323,7 +328,7 @@ export default function Navbar({ mode, restaurant, settings }: NavbarProps) {
 
                         {/* Mobile Menu Button */}
                         <button
-                            className="md:hidden p-2 text-gray-600"
+                            className="xl:hidden p-2 text-gray-600"
                             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                         >
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -340,9 +345,8 @@ export default function Navbar({ mode, restaurant, settings }: NavbarProps) {
 
             {/* Mobile Menu Dropdown */}
             {isMobileMenuOpen && (
-                <div className="md:hidden border-t border-slate-200/70 py-2 px-4 space-y-1 bg-white/95">
+                <div className="xl:hidden border-t border-slate-200/70 py-2 px-3 sm:px-6 space-y-1 bg-white/95">
                     {filteredLinks.map((link) => {
-                        // Special handling for Employees in mobile menu
                         if (link.href === '/dashboard/employees') {
                             const isEmployeesSection = pathname === '/dashboard/employees' || 
                                 pathname === '/dashboard/attendance' || 

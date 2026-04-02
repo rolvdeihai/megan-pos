@@ -1,5 +1,3 @@
-// app/dashboard/layout.tsx
-
 'use client';
 
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -23,11 +21,13 @@ export default function DashboardLayout({
     }
   }, [isLoading, user, router]);
 
-  // Show loading while auth is being determined OR when user is null (before redirect)
   if (isLoading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent" />
+          <p className="text-sm text-slate-400">Memuat...</p>
+        </div>
       </div>
     );
   }
@@ -42,8 +42,8 @@ export default function DashboardLayout({
     return (
       <div className="min-h-screen bg-slate-50">
         <Navbar mode="dashboard" />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <div className="bg-white border border-slate-200/70 rounded-2xl p-6 shadow-sm">
+        <main className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+          <div className="bg-white border border-slate-200/70 rounded-2xl p-8 shadow-sm">
             <h1 className="text-xl font-semibold text-slate-900">Akses dibatasi</h1>
             <p className="mt-2 text-sm text-slate-600">
               Akun Anda tidak memiliki izin untuk membuka halaman ini.
@@ -58,7 +58,7 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-slate-50">
       <Navbar mode="dashboard" />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         {children}
       </main>
     </div>

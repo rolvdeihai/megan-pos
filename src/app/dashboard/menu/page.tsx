@@ -4,9 +4,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { getOwnerId, isEnterprise } from '@/lib/user-scope';
+import { applyIngredientAvailability } from '@/lib/menu-availability';
 import { PlusIcon, PencilIcon, TrashIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import { ChevronLeftIcon, ChevronRightIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline';
 import Tesseract from 'tesseract.js';
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 
 type ParsedMenuItem = {
   name: string;
@@ -30,6 +32,9 @@ type MenuItem = {
   category_id: string;
   category_name?: string;
   tags: string[];
+  effective_is_available?: boolean;
+  sold_out_reason?: string | null;
+  ingredient_stock_issue?: boolean;
 };
 
 type InventoryItem = {
@@ -53,6 +58,15 @@ type Category = {
   description: string;
   display_order: number;
   is_active: boolean;
+};
+
+// Tune stagger and easing for menu card transitions here.
+const menuGridVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.06, delayChildren: 0.04 },
+  },
 };
 
 export default function MenuPage() {
@@ -171,7 +185,19 @@ export default function MenuPage() {
           ...item,
           category_name: item.menu_categories?.name || '',
         }));
-        setMenuItems(formattedItems);
+        const menuIds = formattedItems.map((item) => item.id);
+        let recipeData: any[] = [];
+
+        if (menuIds.length > 0) {
+          const { data } = await supabase
+            .from('menu_item_ingredients')
+            .select('menu_item_id, quantity, inventory(name, current_stock)')
+            .in('menu_item_id', menuIds);
+
+          recipeData = data || [];
+        }
+
+        setMenuItems(applyIngredientAvailability(formattedItems, recipeData));
       }
     } catch (error) {
       console.error('Error in fetchData:', error);
@@ -609,7 +635,7 @@ export default function MenuPage() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto py-8">
+      <div className="py-4 sm:py-6">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
@@ -890,7 +916,7 @@ export default function MenuPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4">
+    <div className="py-4 sm:py-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Manajemen Menu</h1>
         <p className="mt-2 text-gray-600">Kelola menu restoran Anda</p>
@@ -968,19 +994,6 @@ export default function MenuPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
             />
-
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
-            >
-              <option value="all">Semua Kategori</option>
-              {categories.map(category => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
             <button
               onClick={() => document.getElementById('menu-image-upload')?.click()}
               className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center"
@@ -1010,7 +1023,34 @@ export default function MenuPage() {
           </div>
         </div>
 
-        <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="mb-4 flex flex-wrap gap-2">
+          {/* Edit category chip style and spacing here. */}
+          <button
+            onClick={() => setSelectedCategory('all')}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+              selectedCategory === 'all'
+                ? 'bg-primary text-white shadow-sm'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            Semua
+          </button>
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              onClick={() => setSelectedCategory(category.id)}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                selectedCategory === category.id
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
+
+        <div className="bg-white/70 backdrop-blur-sm shadow rounded-2xl border border-white/50 p-4 sm:p-5">
           {filteredItems.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-gray-400 mb-4">
@@ -1020,115 +1060,114 @@ export default function MenuPage() {
               <p className="text-gray-500">Tambahkan item menu pertama Anda</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Item
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Kategori
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Harga
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Aksi
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredItems.map(item => (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center">
-                          {item.image_url ? (
-                            <img
-                              src={item.image_url}
-                              alt={item.name}
-                              className="w-12 h-12 rounded-lg object-cover mr-4"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center mr-4">
-                              <PhotoIcon className="w-6 h-6 text-gray-400" />
-                            </div>
-                          )}
-                          <div>
-                            <div className="font-medium text-gray-900">{item.name}</div>
-                            <div className="text-sm text-gray-500 truncate max-w-xs">
-                              {item.description}
-                            </div>
-                            {item.tags && item.tags.length > 0 && (
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {item.tags.map((tag, index) => (
-                                  <span
-                                    key={index}
-                                    className="inline-block px-2 py-1 text-xs bg-primary/10 text-primary rounded-full"
-                                  >
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{item.category_name || '-'}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-semibold text-gray-900">
-                          Rp {item.price.toLocaleString()}
-                        </div>
-                        {item.cost_price > 0 && (
-                          <div className="text-xs text-gray-500">
-                            HPP: Rp {item.cost_price.toLocaleString()}
+            <LayoutGroup>
+              <motion.div
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4"
+                variants={menuGridVariants}
+                initial="hidden"
+                animate="visible"
+              >
+                <AnimatePresence mode="popLayout">
+                  {filteredItems.map((item) => (
+                    <motion.div
+                      key={item.id}
+                      layout
+                      initial={{ opacity: 0, y: 14 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                      transition={{ duration: 0.25, ease: 'easeOut' }}
+                      className="group rounded-2xl border border-slate-200 bg-white/85 backdrop-blur-sm shadow-sm hover:shadow-xl overflow-hidden"
+                    >
+                      <div className="relative h-44 overflow-hidden">
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            // Tweak image zoom intensity/duration here.
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                          />
+                        ) : (
+                          <div className="h-full w-full bg-slate-100 flex items-center justify-center">
+                            <PhotoIcon className="w-10 h-10 text-slate-400" />
                           </div>
                         )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col gap-2">
+                        <div className="absolute top-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-700">
+                          {item.category_name || 'Tanpa kategori'}
+                        </div>
+                      </div>
+
+                      <div className="p-4">
+                        <h3 className="font-semibold text-slate-900">{item.name}</h3>
+                        <p className="mt-1 text-sm text-slate-500 line-clamp-2 min-h-[40px]">{item.description}</p>
+
+                        {item.tags && item.tags.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {item.tags.slice(0, 3).map((tag, index) => (
+                              <span
+                                key={index}
+                                className="inline-flex px-2 py-0.5 text-[11px] bg-primary/10 text-primary rounded-full"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="mt-3 flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">Rp {item.price.toLocaleString()}</p>
+                            {item.cost_price > 0 && (
+                              <p className="text-xs text-slate-500">HPP: Rp {item.cost_price.toLocaleString()}</p>
+                            )}
+                          </div>
                           <button
                             onClick={() => toggleItemAvailability(item)}
-                            className={`px-3 py-1 text-xs rounded-full w-24 ${item.is_available
-                                ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                                : 'bg-red-100 text-red-800 hover:bg-red-200'
+                            className={`px-3 py-1 text-xs rounded-full ${item.effective_is_available === false
+                                ? 'bg-red-100 text-red-800 hover:bg-red-200'
+                                : item.is_available
+                                  ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                                  : 'bg-red-100 text-red-800 hover:bg-red-200'
                               }`}
                           >
-                            {item.is_available ? 'Tersedia' : 'Habis'}
+                            {item.effective_is_available === false ? 'Habis' : item.is_available ? 'Tersedia' : 'Habis'}
                           </button>
-                          {item.is_featured && (
-                            <span className="px-3 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full w-24 text-center">
+                        </div>
+
+                        {item.ingredient_stock_issue && item.sold_out_reason && (
+                          <p className="mt-2 text-xs text-red-600">
+                            {item.sold_out_reason}
+                          </p>
+                        )}
+
+                        <div className="mt-4 flex items-center justify-between">
+                          {item.is_featured ? (
+                            <span className="px-2.5 py-1 text-xs bg-amber-100 text-amber-800 rounded-full">
                               Featured
                             </span>
+                          ) : (
+                            <span />
                           )}
+                          <div className="flex gap-3 text-sm font-medium">
+                            <button
+                              onClick={() => editItem(item)}
+                              className="text-primary hover:text-primary/80"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => deleteItem(item.id)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Hapus
+                            </button>
+                          </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-3">
-                          <button
-                            onClick={() => editItem(item)}
-                            className="text-primary hover:text-primary"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => deleteItem(item.id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Hapus
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                      </div>
+                    </motion.div>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </AnimatePresence>
+              </motion.div>
+            </LayoutGroup>
           )}
         </div>
       </div>

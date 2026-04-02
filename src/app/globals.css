@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 :root {
-  --primary: #3B82F6;
-  /* Default Blue */
-  --secondary: #10B981;
-  /* Default Green */
+  /* // Edit: Updated primary theme color to vibrant coral for zesty visual identity. */
+  --primary: #FF6B6B;
+  /* // Edit: Updated secondary theme color to bright tangerine for warm accents. */
+  --secondary: #FF8C42;
 }
 
 @theme {
@@ -14,9 +14,16 @@
 
 /* Optional: Tambahkan custom CSS atau override di sini */
 @layer utilities {
-  /* Contoh custom utility kalau perlu */
+  /* // Edit: Added reusable coral glow shadow utility for premium warm emphasis. */
+  .shadow-glow {
+    box-shadow: 0 10px 25px -5px rgba(255, 107, 107, 0.4), 0 8px 10px -6px rgba(255, 107, 107, 0.2);
+  }
+
+  /* // Edit: Upgraded custom button utility with softer corners and glow for tablet-friendly CTAs. */
   .custom-btn {
-    @apply px-4 py-2 text-white rounded transition-opacity;
+    @apply px-4 py-2 text-white rounded-2xl transition-opacity;
+    /* // Edit: Applied glow directly because Tailwind cannot @apply custom utility classes. */
+    box-shadow: 0 10px 25px -5px rgba(255, 107, 107, 0.4), 0 8px 10px -6px rgba(255, 107, 107, 0.2);
     background-color: var(--primary);
   }
 
@@ -27,3 +34,43 @@
 
 /* Kalau mau disable preflight (reset styles dasar Tailwind) */
 /* @import "tailwindcss/preflight" layer(base);  ← hapus atau komentari kalau tidak butuh reset */
+
+/* Dashboard animations */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@layer utilities {
+  .animate-fade-in-up {
+    animation: fade-in-up 0.5s ease-out both;
+  }
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out both;
+  }
+  .animate-scale-in {
+    animation: scale-in 0.35s ease-out both;
+  }
+}

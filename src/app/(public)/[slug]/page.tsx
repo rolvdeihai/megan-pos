@@ -2,12 +2,14 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Navbar from '@/components/layout/Navbar';
 import { sendOrderEmail } from '@/lib/email-service';
-import { checkTableConflict } from '@/lib/table-availability';
+import { buildTableAvailability, checkTableConflict, type TableOrderStatus } from '@/lib/table-availability';
+import { applyIngredientAvailability } from '@/lib/menu-availability';
+import { combineReservationDateTime, getLocalDateInput, getLocalTimeInput } from '@/lib/reservation-datetime';
 
 interface MenuItem {
   id: string;
@@ -15,6 +17,9 @@ interface MenuItem {
   description: string;
   price: number;
   image_url: string;
+  is_available?: boolean;
+  effective_is_available?: boolean;
+  sold_out_reason?: string | null;
   preparation_time?: number;
 }
 
@@ -30,6 +35,7 @@ export default function PublicOrderPage() {
   const [loading, setLoading] = useState(true);
   const [orderType, setOrderType] = useState<'dine_in' | 'takeaway' | 'delivery'>('dine_in');
   const [tables, setTables] = useState<any[]>([]);
+  const [activeTableOrders, setActiveTableOrders] = useState<TableOrderStatus[]>([]);
   const [selectedTable, setSelectedTable] = useState<string>('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -39,12 +45,27 @@ export default function PublicOrderPage() {
   const [orderSubmitted, setOrderSubmitted] = useState(false);
   const [orderNumber, setOrderNumber] = useState<string>('');
   const [orderData, setOrderData] = useState<any>(null); // Store full order data
-  const [selectedTime, setSelectedTime] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateInput());
+  const [selectedHour, setSelectedHour] = useState<string>(() => getLocalTimeInput());
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
   const slug = params.slug as string;
   const tableParam = searchParams.get('table');
+  const selectedTime = combineReservationDateTime(selectedDate, selectedHour);
+  const effectiveSelectedTime = selectedTime || combineReservationDateTime(getLocalDateInput(), getLocalTimeInput());
+  const tableOptions = useMemo(
+    () => buildTableAvailability(tables, activeTableOrders, effectiveSelectedTime),
+    [tables, activeTableOrders, effectiveSelectedTime]
+  );
+
+  useEffect(() => {
+    if (!selectedTable) return;
+    const selectedTableOption = tableOptions.find((table) => table.id === selectedTable);
+    if (selectedTableOption && !selectedTableOption.is_selectable) {
+      setSelectedTable('');
+    }
+  }, [selectedTable, tableOptions]);
 
   useEffect(() => {
     if (slug) {
@@ -60,14 +81,9 @@ export default function PublicOrderPage() {
       );
       if (matchedTable) {
         setSelectedTable(matchedTable.id);
-        // Auto‑set time to current local datetime
         const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        setSelectedTime(`${year}-${month}-${day}T${hours}:${minutes}`);
+        setSelectedDate(getLocalDateInput(now));
+        setSelectedHour(getLocalTimeInput(now));
       }
     }
   }, [tableParam, tables]);
@@ -148,7 +164,19 @@ export default function PublicOrderPage() {
         console.error('Error fetching menu items:', menuError);
         setMenuItems([]);
       } else {
-        setMenuItems(menuData || []);
+        const menuIds = (menuData || []).map((item) => item.id);
+        let recipeData: any[] = [];
+
+        if (menuIds.length > 0) {
+          const { data } = await supabase
+            .from('menu_item_ingredients')
+            .select('menu_item_id, quantity, inventory(name, current_stock)')
+            .in('menu_item_id', menuIds);
+
+          recipeData = data || [];
+        }
+
+        setMenuItems(applyIngredientAvailability(menuData || [], recipeData));
       }
 
       // 4. Fetch tables if dine-in enabled - PERBAIKI QUERY INI
@@ -175,6 +203,19 @@ export default function PublicOrderPage() {
             }
           }
         }
+      }
+
+      const { data: activeOrdersData, error: activeOrdersError } = await supabase
+        .from('orders')
+        .select('table_id, status, scheduled_time, created_at')
+        .eq('user_id', userId)
+        .not('status', 'in', '("completed","cancelled")')
+        .not('table_id', 'is', null);
+
+      if (activeOrdersError) {
+        console.error('Error fetching active table orders:', activeOrdersError);
+      } else {
+        setActiveTableOrders(activeOrdersData || []);
       }
 
       setLoading(false);
@@ -204,6 +245,11 @@ export default function PublicOrderPage() {
   };
 
   const addToCart = (item: MenuItem) => {
+    if (item.effective_is_available === false) {
+      alert(item.sold_out_reason || 'Menu ini sedang habis');
+      return;
+    }
+
     const newCart = [...cart];
     const existingItem = newCart.find(i => i.id === item.id);
 
@@ -257,14 +303,16 @@ export default function PublicOrderPage() {
       return;
     }
 
+    const unavailableItem = cart.find((item) => item.effective_is_available === false);
+    if (unavailableItem) {
+      alert(unavailableItem.sold_out_reason || `${unavailableItem.name} sedang habis`);
+      return;
+    }
+
     // --- Dine-in specific validations ---
     if (orderType === 'dine_in') {
       if (!selectedTable) {
         alert('Pilih meja untuk order dine-in');
-        return;
-      }
-      if (!tableParam && !selectedTime) {
-        alert('Pilih waktu reservasi');
         return;
       }
       if (!customerPhone) {
@@ -419,7 +467,7 @@ export default function PublicOrderPage() {
   if (!settings?.enable_online_orders) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar mode="public" restaurant={restaurant} settings={settings} />
+        <Navbar mode="public" restaurant={restaurant} settings={settings} showAuthControls={false} />
         <div className="max-w-7xl mx-auto px-4 py-16 text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             Pemesanan Online Sedang Tidak Tersedia
@@ -435,7 +483,7 @@ export default function PublicOrderPage() {
   if (orderSubmitted) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar mode="public" restaurant={restaurant} settings={settings} />
+        <Navbar mode="public" restaurant={restaurant} settings={settings} showAuthControls={false} />
         <div className="max-w-2xl mx-auto px-4 py-16">
           <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
             <div className="w-20 h-20 bg-secondary/10 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -497,11 +545,13 @@ export default function PublicOrderPage() {
     );
   }
 
+  // Edit: Switched the public order page background to warm off-white so the content cards stand out more clearly.
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50">
-      <Navbar mode="public" restaurant={restaurant} settings={settings} />
+    <div className="min-h-screen bg-[#FAFAFA]">
+      <Navbar mode="public" restaurant={restaurant} settings={settings} showAuthControls={false} />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      {/* // Edit: Kept the layout responsive while slightly refining spacing for mobile, tablet, and desktop flow. */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
         <div className="mb-8 rounded-2xl border border-slate-200/70 bg-white/80 backdrop-blur p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
@@ -529,27 +579,47 @@ export default function PublicOrderPage() {
           </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-8">
+        {/* // Edit: Upgraded the main content area to a balanced responsive grid so the form, menu, and cart feel more intentional on tablet and desktop. */}
+        <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1.65fr)_360px]">
           {/* Left Column - Order Form */}
-          <div className="lg:w-2/3">
-            <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6 mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Informasi Order</h2>
+          <div className="space-y-8">
+            {/* // Edit: Wrapped the order information area in a softer premium white card with larger radius and subtle border separation. */}
+            <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-6 sm:p-7 mb-8">
+              {/* // Edit: Added a richer heading block and supporting copy so the order form is easier to understand at a glance. */}
+              <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-2xl font-extrabold text-gray-900">Informasi Order</h2>
+                  <p className="mt-2 text-sm text-gray-500">
+                    Lengkapi detail pemesanan terlebih dahulu, lalu lanjut pilih menu favorit Anda.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                    {orderType === 'dine_in' ? 'Dine In' : orderType === 'takeaway' ? 'Takeaway' : 'Delivery'}
+                  </span>
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+                    {cart.length} item di keranjang
+                  </span>
+                </div>
+              </div>
 
               {/* Order Type Selection */}
               <div className="mb-8">
                 <label className="block text-sm font-medium text-gray-700 mb-4">
                   Tipe Order
                 </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* // Edit: Refined the order type buttons into a cleaner responsive grid with larger tablet-friendly touch targets. */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {settings?.enable_table_selection && (
                     <button
                       type="button"
                       onClick={() => setOrderType('dine_in')}
-                      className={`p-4 rounded-lg border-2 flex flex-col items-center justify-center ${orderType === 'dine_in'
-                        ? 'border-primary bg-primary/10'
-                        : 'border-gray-200 hover:border-gray-300'
+                      className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center transition-colors ${orderType === 'dine_in'
+                        ? 'border-primary bg-primary/5 text-primary shadow-glow'
+                        : 'border-gray-200 hover:border-primary/50 hover:bg-gray-50'
                         }`}
                     >
+                      {/* // Edit: Updated the order type selector with softer corners plus warm primary selected and hover states. */}
                       <div className="text-2xl mb-2">🍽️</div>
                       <h3 className="font-semibold text-gray-900">Dine In</h3>
                       <p className="text-sm text-gray-600 mt-1">Makan di tempat</p>
@@ -558,11 +628,12 @@ export default function PublicOrderPage() {
                   <button
                     type="button"
                     onClick={() => setOrderType('takeaway')}
-                    className={`p-4 rounded-lg border-2 flex flex-col items-center justify-center ${orderType === 'takeaway'
-                      ? 'border-primary bg-primary/10'
-                      : 'border-gray-200 hover:border-gray-300'
+                    className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center transition-colors ${orderType === 'takeaway'
+                      ? 'border-primary bg-primary/5 text-primary shadow-glow'
+                      : 'border-gray-200 hover:border-primary/50 hover:bg-gray-50'
                       }`}
                   >
+                    {/* // Edit: Updated the order type selector with softer corners plus warm primary selected and hover states. */}
                     <div className="text-2xl mb-2">🥡</div>
                     <h3 className="font-semibold text-gray-900">Takeaway</h3>
                     <p className="text-sm text-gray-600 mt-1">Ambil di tempat</p>
@@ -571,11 +642,12 @@ export default function PublicOrderPage() {
                     <button
                       type="button"
                       onClick={() => setOrderType('delivery')}
-                      className={`p-4 rounded-lg border-2 flex flex-col items-center justify-center ${orderType === 'delivery'
-                        ? 'border-primary bg-primary/10'
-                        : 'border-gray-200 hover:border-gray-300'
+                      className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center transition-colors ${orderType === 'delivery'
+                        ? 'border-primary bg-primary/5 text-primary shadow-glow'
+                        : 'border-gray-200 hover:border-primary/50 hover:bg-gray-50'
                         }`}
                     >
+                      {/* // Edit: Updated the order type selector with softer corners plus warm primary selected and hover states. */}
                       <div className="text-2xl mb-2">🚚</div>
                       <h3 className="font-semibold text-gray-900">Delivery</h3>
                       <p className="text-sm text-gray-600 mt-1">Antar ke alamat</p>
@@ -585,72 +657,159 @@ export default function PublicOrderPage() {
               </div>
 
               {/* Order Details */}
+              {/* // Edit: Reorganized the form spacing so reservation details and customer fields feel more compact without reducing clarity. */}
               <div className="space-y-6">
                 {orderType === 'dine_in' && (
                   <>
-                    {/* Table selection */}
-                    <div>
+                    {/* // Edit: Grouped reservation date and time into a dedicated two-column panel to reduce vertical scrolling before table selection. */}
+                    <div className="grid grid-cols-1 gap-4 rounded-[1.5rem] border border-gray-100 bg-[#FFFDFC] p-4 sm:grid-cols-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Tanggal Reservasi
+                        </label>
+                        {/* // Edit: Softened the date input with larger radius, lighter border, and primary focus styling. */}
+                        <input
+                          type="date"
+                          value={selectedDate}
+                          onChange={(e) => setSelectedDate(e.target.value)}
+                          className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                          min={getLocalDateInput()}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Jam Reservasi
+                        </label>
+                        {/* // Edit: Softened the time input with larger radius, lighter border, and primary focus styling. */}
+                        <input
+                          type="time"
+                          value={selectedHour}
+                          onChange={(e) => setSelectedHour(e.target.value)}
+                          className="w-full px-4 py-3 border border-gray-200 rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        />
+                        {tableParam && (
+                          <p className="text-sm text-gray-500 mt-1">
+                            Tanggal otomatis hari ini, jam bisa disesuaikan.
+                          </p>
+                        )}
+                        {!tableParam && (
+                          <p className="text-sm text-gray-500 mt-1">
+                            Tanggal otomatis hari ini, tinggal pilih jam lalu cek meja yang kosong.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* // Edit: Turned the table picker into a distinct sub-card so it reads like its own step in the order flow. */}
+                    <div className="rounded-[1.75rem] border border-gray-100 bg-[#FFFDFC] p-4 sm:p-5">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Pilih Meja
                       </label>
-                      {tables.length === 0 ? (
+                      <p className="mb-4 text-sm text-gray-500">
+                        Pilih meja yang paling sesuai. Meja aktif ditonjolkan, sementara slot terpakai tetap mudah dipindai.
+                      </p>
+                      {tableOptions.length === 0 ? (
                         <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
                           Tidak ada meja yang tersedia. Harap hubungi restoran.
                         </div>
                       ) : (
-                        <select
-                          value={selectedTable}
-                          onChange={(e) => setSelectedTable(e.target.value)}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary"
-                          required
-                        >
-                          <option value="">Pilih Meja</option>
-                          {tables.map(table => (
-                            <option
-                              key={table.id}
-                              value={table.id}
-                              disabled={!table.is_available}
-                            >
-                              {table.table_name || `Meja ${table.table_number}`} (Max {table.capacity} orang)
-                              {!table.is_available && ' - Tidak Tersedia'}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
+                        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+                          {/* // Edit: Tightened the table grid so more options stay visible without overwhelming the page. */}
+                          {tableOptions.map((table) => {
+                            const isSelected = selectedTable === table.id;
+                            return (
+                              <button
+                                key={table.id}
+                                type="button"
+                                onClick={() => table.is_selectable && setSelectedTable(table.id)}
+                                disabled={!table.is_selectable}
+                                className={`rounded-[1.5rem] border p-4 text-left transition-all duration-200 ${isSelected
+                                  ? 'border-primary bg-primary/5 ring-1 ring-primary shadow-sm'
+                                  : table.is_selectable
+                                    ? 'border-slate-200 bg-white hover:-translate-y-0.5 hover:border-primary/50 hover:bg-gray-50 hover:shadow-sm'
+                                    : 'border-amber-200 bg-amber-50/70 opacity-90'
+                                  } ${!table.is_selectable ? 'cursor-not-allowed' : ''}`}
+                              >
+                                {/* // Edit: Refined table cards with warm primary selected styling and gentler hover treatment. */}
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="font-semibold text-slate-900">
+                                      {table.table_name || `Meja ${table.table_number}`}
+                                    </p>
+                                    <p className="text-xs text-slate-500">
+                                      Kapasitas {table.capacity} orang
+                                    </p>
+                                  </div>
+                                  {/* // Edit: Updated available badges to use softer warm-friendly status colors. */}
+                                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${table.is_selectable
+                                    ? 'bg-green-50 text-green-600'
+                                    : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                    {table.availability_label}
+                                  </span>
+                                </div>
 
-                    {/* Scheduled time (keep as is) */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Waktu Reservasi
-                      </label>
-                      <input
-                        type="datetime-local"
-                        value={selectedTime}
-                        onChange={(e) => setSelectedTime(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary"
-                        required={!tableParam}
-                        min={new Date().toISOString().slice(0, 16)}
-                      />
-                      {tableParam && (
-                        <p className="text-sm text-gray-500 mt-1">
-                          Waktu reservasi diatur otomatis ke waktu sekarang.
-                        </p>
+                                {/* // Edit: Highlighted the chosen booking slot in a softer inset panel for better scanning. */}
+                                <div className="mt-3 rounded-2xl bg-white/90 px-3 py-2.5 ring-1 ring-gray-100">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                    Slot Dipilih
+                                  </p>
+                                  <p className="mt-1 text-sm font-medium text-slate-900">
+                                    {table.selected_slot_label}
+                                  </p>
+                                </div>
+
+                                {/* // Edit: Reduced clutter by showing booking chips in a more compact block while keeping availability context visible. */}
+                                <div className="mt-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                    Jadwal Terpakai
+                                  </p>
+                                  {table.today_booking_ranges.length > 0 ? (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      {table.today_booking_ranges.slice(0, 3).map((range) => (
+                                        <span
+                                          key={`${table.id}-${range}`}
+                                          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
+                                        >
+                                          {range}
+                                        </span>
+                                      ))}
+                                      {table.today_booking_ranges.length > 3 && (
+                                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
+                                          +{table.today_booking_ranges.length - 3} slot
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <p className="mt-1 text-xs text-slate-500">Kosong sepanjang hari.</p>
+                                  )}
+                                </div>
+
+                                {table.availability_hint && (
+                                  <p className="mt-3 text-xs leading-relaxed text-slate-600">{table.availability_hint}</p>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
                   </>
                 )}
 
+                {/* // Edit: Kept customer details in a responsive two-column layout so the form stays compact on larger screens. */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Nama Anda
                     </label>
+                    {/* // Edit: Matched customer inputs to the softened reservation field style for a more cohesive form. */}
                     <input
                       type="text"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                       placeholder="Nama lengkap"
                       required={orderType !== 'dine_in'}
                     />
@@ -659,11 +818,12 @@ export default function PublicOrderPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       No. Telepon
                     </label>
+                    {/* // Edit: Matched customer inputs to the softened reservation field style for a more cohesive form. */}
                     <input
                       type="tel"
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                       placeholder="08xxxxxxxxxx"
                       required={orderType === 'delivery'}
                     />
@@ -675,10 +835,11 @@ export default function PublicOrderPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Alamat Pengiriman
                     </label>
+                    {/* // Edit: Softened the delivery textarea styling to match the rest of the premium form controls. */}
                     <textarea
                       value={deliveryAddress}
                       onChange={(e) => setDeliveryAddress(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                       rows={3}
                       placeholder="Alamat lengkap untuk pengiriman"
                       required
@@ -690,10 +851,11 @@ export default function PublicOrderPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Catatan Tambahan (Opsional)
                   </label>
+                  {/* // Edit: Softened the notes textarea styling to keep the final form section visually consistent. */}
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                     rows={2}
                     placeholder="Contoh: Tidak pakai pedas, tambah saus, dll."
                   />
@@ -702,37 +864,74 @@ export default function PublicOrderPage() {
             </div>
 
             {/* Menu Items */}
-            <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Pilih Menu</h2>
+            {/* // Edit: Rebuilt the menu area as a dedicated browsing card with clearer hierarchy and more efficient item cards. */}
+            <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-6 sm:p-7">
+              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-2xl font-extrabold text-gray-900">Pilih Menu</h2>
+                  <p className="mt-2 text-sm text-gray-500">
+                    Menu dibuat lebih ringkas agar pelanggan bisa membandingkan item dengan cepat.
+                  </p>
+                </div>
+                <div className="inline-flex w-fit rounded-full bg-primary/10 px-4 py-2 text-sm font-semibold text-primary">
+                  {menuItems.length} menu tersedia
+                </div>
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* // Edit: Tuned the menu grid to show more products per viewport while staying readable on mobile and tablet. */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {menuItems.map(item => (
                   <div
                     key={item.id}
-                    className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                    className={`flex h-full flex-col rounded-[1.75rem] border p-5 transition-all duration-200 ${item.effective_is_available === false
+                      ? 'border-red-200 bg-red-50/40'
+                      : 'border-gray-100 bg-[#FFFDFC] hover:-translate-y-0.5 hover:shadow-md'
+                      }`}
                   >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
+                    {/* // Edit: Converted menu items into taller commerce-style cards with softer corners and clearer action placement. */}
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
                         <h3 className="font-semibold text-gray-900">{item.name}</h3>
-                        <p className="text-sm text-gray-600 mt-1">{item.description}</p>
-                        <p className="text-lg font-bold text-primary mt-2">
+                        <p className="mt-1 text-sm leading-6 text-gray-600">{item.description}</p>
+                        <p className="mt-3 text-lg font-bold text-primary">
                           Rp {item.price.toLocaleString()}
                         </p>
+                        {item.effective_is_available === false && (
+                          <p className="text-xs text-red-600 mt-2">
+                            {item.sold_out_reason || 'Menu ini sedang habis'}
+                          </p>
+                        )}
                       </div>
                       <button
                         onClick={() => addToCart(item)}
-                        className="ml-2 p-2 bg-primary/10 text-primary rounded-full hover:bg-primary/20"
+                        disabled={item.effective_is_available === false}
+                        className={`mt-1 shrink-0 rounded-full p-2.5 ${item.effective_is_available === false
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                          : 'bg-primary/10 text-primary hover:bg-primary/20'
+                          }`}
                       >
+                        {/* // Edit: Enlarged the add button and anchored it visually so product actions are faster to spot. */}
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                         </svg>
                       </button>
                     </div>
-                    {item.preparation_time && (
-                      <div className="text-sm text-gray-500">
-                        ⏱️ {item.preparation_time} menit
-                      </div>
-                    )}
+                    {/* // Edit: Moved preparation time and availability into a compact footer row for quicker menu comparison. */}
+                    <div className="mt-auto flex items-center justify-between gap-3 pt-4">
+                      {item.preparation_time ? (
+                        <div className="text-sm text-gray-500">
+                          ⏱️ {item.preparation_time} menit
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-400">Siap dipesan</div>
+                      )}
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${item.effective_is_available === false
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-green-50 text-green-600'
+                        }`}>
+                        {item.effective_is_available === false ? 'Habis' : 'Tersedia'}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -740,15 +939,22 @@ export default function PublicOrderPage() {
           </div>
 
           {/* Right Column - Cart Summary */}
-          <div className="lg:w-1/3">
-            <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6 sticky top-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Keranjang</h2>
+          <div>
+            {/* // Edit: Wrapped the cart summary in a matching premium white card with larger radius and subtle border definition. */}
+            <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-6 sm:p-7 xl:sticky xl:top-24">
+              {/* // Edit: Increased the cart heading weight for clearer separation from the body content. */}
+              <div className="mb-6 flex items-center justify-between gap-3">
+                <h2 className="text-2xl font-extrabold text-gray-900">Keranjang</h2>
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+                  {cart.reduce((sum, item) => sum + item.quantity, 0)} item
+                </span>
+              </div>
 
               {cart.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="rounded-[1.5rem] border border-dashed border-gray-200 bg-[#FFFDFC] py-10 text-center text-gray-500">
                   <div className="text-4xl mb-4">🛒</div>
-                  <p>Keranjang kosong</p>
-                  <p className="text-sm">Tambahkan item dari menu</p>
+                  <p className="font-medium text-gray-700">Keranjang kosong</p>
+                  <p className="mt-1 text-sm">Tambahkan item dari menu untuk mulai checkout</p>
                 </div>
               ) : (
                 <>

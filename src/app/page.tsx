@@ -22,9 +22,10 @@ export default function HomePage() {
   const [email, setEmail] = useState('');
   const { user } = useAuth();
   const isThemed = Boolean(user);
+  // Edit: Updated primary button styling to use warm glow and softer corners with larger tap padding.
   const primaryButtonClass = isThemed
-    ? 'bg-primary hover:bg-primary/90'
-    : 'bg-blue-600 hover:bg-blue-600/90';
+    ? 'bg-primary hover:bg-primary/90 shadow-glow rounded-2xl px-5 py-3 md:px-6 md:py-3.5'
+    : 'bg-[#FF6B6B] hover:bg-[#FF6B6B]/90 shadow-glow rounded-2xl px-5 py-3 md:px-6 md:py-3.5';
   const primaryTextClass = isThemed ? 'text-primary' : 'text-blue-600';
   const primaryHoverTextClass = isThemed ? 'hover:text-primary' : 'hover:text-blue-600';
 
@@ -33,37 +34,43 @@ export default function HomePage() {
       icon: <ShoppingBagIcon className="w-8 h-8" />,
       title: 'Manajemen Order Lengkap',
       description: 'Kelola order dine-in, takeaway, dan delivery dalam satu sistem terintegrasi',
-      color: 'text-blue-600 bg-blue-600/10'
+      // Edit: Updated feature color to warm primary tone.
+      color: 'text-primary bg-primary/10'
     },
     {
       icon: <BuildingStorefrontIcon className="w-8 h-8" />,
       title: 'Menu & Inventory',
       description: 'Kelola menu, stok bahan baku, dan atur ketersediaan item secara real-time',
-      color: 'text-green-600 bg-green-100'
+      // Edit: Updated feature color to warm secondary tone.
+      color: 'text-secondary bg-secondary/10'
     },
     {
       icon: <ChartBarIcon className="w-8 h-8" />,
       title: 'Laporan & Analitik',
       description: 'Dashboard lengkap dengan laporan penjualan, keuangan, dan analitik bisnis',
-      color: 'text-purple-600 bg-purple-100'
+      // Edit: Updated feature color to warm primary tone.
+      color: 'text-primary bg-primary/10'
     },
     {
       icon: <DevicePhoneMobileIcon className="w-8 h-8" />,
       title: 'Website & Menu Online',
       description: 'Website otomatis dengan menu online untuk pemesanan dari pelanggan',
-      color: 'text-orange-600 bg-orange-100'
+      // Edit: Updated feature color to warm secondary tone.
+      color: 'text-secondary bg-secondary/10'
     },
     {
       icon: <UserGroupIcon className="w-8 h-8" />,
       title: 'Manajemen Karyawan',
       description: 'Kelola staff dengan berbagai role: admin, kasir, dapur, dan pelayan',
-      color: 'text-red-600 bg-red-100'
+      // Edit: Updated feature color to warm primary tone.
+      color: 'text-primary bg-primary/10'
     },
     {
       icon: <CurrencyDollarIcon className="w-8 h-8" />,
       title: 'Multi Payment',
       description: 'Dukung berbagai metode pembayaran: cash, QRIS, kartu, dan transfer',
-      color: 'text-yellow-600 bg-yellow-100'
+      // Edit: Updated feature color to warm secondary tone.
+      color: 'text-secondary bg-secondary/10'
     }
   ];
 
@@ -144,8 +151,9 @@ export default function HomePage() {
     }
   };
 
+  // Edit: Switched page base background to warm off-white for appetizing vibe.
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[#FAFAFA]">
       {/* Navigation */}
       <nav className="fixed w-full bg-white/90 backdrop-blur-sm z-50 border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -180,11 +188,13 @@ export default function HomePage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      {/* // Edit: Updated hero gradient to warm tones. */}
+      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-[#FFF5F5] via-[#FAFAFA] to-[#FFF0E6]">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
-              <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
+              {/* // Edit: Increased heading weight for stronger visual hierarchy. */}
+              <h1 className="text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight">
                 Kelola Restoran Anda dengan
                 <span className="text-blue-600"> Sistem Modern</span>
               </h1>
@@ -192,16 +202,18 @@ export default function HomePage() {
                 Megan POS membantu Anda mengelola semua aspek bisnis restoran, dari order, inventori, hingga laporan keuangan, dalam satu platform terintegrasi.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row gap-4">
+                {/* // Edit: Enlarged CTA tap target for tablet comfort and soft corners. */}
                 <Link
                   href="/register"
-                  className={`inline-flex items-center justify-center px-8 py-3 text-base font-medium rounded-lg text-white ${primaryButtonClass}`}
+                  className={`inline-flex items-center justify-center text-base font-medium text-white ${primaryButtonClass}`}
                 >
                   Mulai Gratis 14 Hari
                   <ArrowRightIcon className="ml-2 w-5 h-5" />
                 </Link>
+                {/* // Edit: Enlarged secondary CTA tap target and softened corner radius. */}
                 <a
                   href="#demo"
-                  className="inline-flex items-center justify-center px-8 py-3 text-base font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  className="inline-flex items-center justify-center px-8 py-3.5 md:py-4 text-base font-medium rounded-2xl border border-gray-300 text-gray-700 hover:bg-gray-50"
                 >
                   Lihat Demo
                 </a>
@@ -259,7 +271,8 @@ export default function HomePage() {
       <section id="features" className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+            {/* // Edit: Increased heading weight for stronger visual hierarchy. */}
+            <h2 className="text-4xl font-extrabold text-gray-900 mb-4">
               Semua yang Anda Butuhkan dalam Satu Platform
             </h2>
             <p className="text-xl text-gray-600">
@@ -271,12 +284,14 @@ export default function HomePage() {
             {features.map((feature, idx) => (
               <div
                 key={idx}
-                className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow"
+                className="bg-white rounded-3xl border border-gray-200 p-6 md:p-7 hover:shadow-xl hover:shadow-primary/5 transition-shadow"
               >
+                {/* // Edit: Upgraded feature cards with softer large corners, tablet-friendly padding, and warm hover shadow. */}
                 <div className={`w-16 h-16 rounded-lg flex items-center justify-center ${feature.color} mb-6`}>
                   {feature.icon}
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3">
+                {/* // Edit: Increased heading weight for stronger visual hierarchy. */}
+                <h3 className="text-xl font-extrabold text-gray-900 mb-3">
                   {feature.title}
                 </h3>
                 <p className="text-gray-600">
@@ -292,7 +307,8 @@ export default function HomePage() {
       <section className="py-20 bg-gradient-to-r from-blue-50 to-purple-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+            {/* // Edit: Increased heading weight for stronger visual hierarchy. */}
+            <h2 className="text-4xl font-extrabold text-gray-900 mb-4">
               Mulai dalam 3 Langkah Mudah
             </h2>
             <p className="text-xl text-gray-600">
@@ -319,11 +335,13 @@ export default function HomePage() {
               }
             ].map((item, idx) => (
               <div key={idx} className="relative">
-                <div className="bg-white rounded-2xl shadow-lg p-8">
+                {/* // Edit: Softened process card corners and hover depth for premium tactile feel. */}
+                <div className="bg-white rounded-[2rem] shadow-lg p-8 hover:shadow-xl hover:shadow-primary/5 transition-shadow">
                   <div className="text-4xl font-bold text-blue-600 mb-4">
                     {item.step}
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3">
+                  {/* // Edit: Increased heading weight for stronger visual hierarchy. */}
+                  <h3 className="text-xl font-extrabold text-gray-900 mb-3">
                     {item.title}
                   </h3>
                   <p className="text-gray-600">
@@ -345,7 +363,8 @@ export default function HomePage() {
       <section id="pricing" className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+            {/* // Edit: Increased heading weight for stronger visual hierarchy. */}
+            <h2 className="text-4xl font-extrabold text-gray-900 mb-4">
               Paket Harga Terjangkau
             </h2>
             <p className="text-xl text-gray-600">
@@ -357,8 +376,9 @@ export default function HomePage() {
             {pricingPlans.map((plan, idx) => (
               <div
                 key={idx}
-                className={`bg-white rounded-2xl shadow-lg ${plan.color} p-8 relative`}
+                className={`bg-white rounded-[2rem] shadow-lg hover:shadow-xl hover:shadow-primary/5 ${plan.color} p-8 md:p-9 relative transition-shadow`}
               >
+                {/* // Edit: Upgraded pricing cards with softer corners, tablet-friendly spacing, and warm hover shadow. */}
                 {plan.recommended && (
                   <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                     <span className={`${primaryButtonClass} text-white px-4 py-1 rounded-full text-sm font-medium`}>
@@ -367,7 +387,8 @@ export default function HomePage() {
                   </div>
                 )}
 
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                {/* // Edit: Increased heading weight for stronger visual hierarchy. */}
+                <h3 className="text-2xl font-extrabold text-gray-900 mb-2">
                   {plan.name}
                 </h3>
                 <div className="flex items-baseline mb-6">
@@ -385,10 +406,10 @@ export default function HomePage() {
                     </li>
                   ))}
                 </ul>
-
+                {/* // Edit: Increased button tap area and softened corners for tablet friendliness. */}
                 <Link
                   href="/register"
-                  className={`block text-center py-3 rounded-lg font-medium ${plan.recommended
+                  className={`block text-center py-3.5 md:py-4 rounded-2xl font-medium ${plan.recommended
                       ? `${primaryButtonClass} text-white`
                       : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
                     }`}
@@ -411,7 +432,8 @@ export default function HomePage() {
       <section id="testimonials" className="py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+            {/* // Edit: Increased heading weight for stronger visual hierarchy. */}
+            <h2 className="text-4xl font-extrabold text-gray-900 mb-4">
               Dipercaya oleh Pemilik Restoran
             </h2>
             <p className="text-xl text-gray-600">
@@ -421,7 +443,8 @@ export default function HomePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {testimonials.map((testimonial, idx) => (
-              <div key={idx} className="bg-white rounded-2xl shadow-lg p-8">
+              <div key={idx} className="bg-white rounded-[2rem] shadow-lg p-8 hover:shadow-xl hover:shadow-primary/5 transition-shadow">
+                {/* // Edit: Softened testimonial card corners and hover shadow for premium consistency. */}
                 <div className="flex items-center mb-6">
                   <div className="w-12 h-12 bg-blue-600/10 rounded-full flex items-center justify-center">
                     <span className="font-bold text-blue-600">
@@ -429,7 +452,8 @@ export default function HomePage() {
                     </span>
                   </div>
                   <div className="ml-4">
-                    <div className="font-bold text-gray-900">
+                    {/* // Edit: Increased heading weight for stronger visual hierarchy. */}
+                    <div className="font-extrabold text-gray-900">
                       {testimonial.name}
                     </div>
                     <div className="text-gray-600">
@@ -459,9 +483,11 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-blue-600 to-purple-600">
+      {/* // Edit: Updated bottom CTA gradient to coral-tangerine blend. */}
+      <section className="py-20 bg-gradient-to-r from-[#FF6B6B] to-[#FF8C42]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl font-bold text-white mb-4">
+          {/* // Edit: Increased heading weight for stronger visual hierarchy. */}
+          <h2 className="text-4xl font-extrabold text-white mb-4">
             Siap Mengubah Cara Anda Mengelola Restoran?
           </h2>
           <p className="text-xl text-blue-100 mb-8">
@@ -478,9 +504,10 @@ export default function HomePage() {
                 className="flex-1 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
                 required
               />
+              {/* // Edit: Enlarged CTA tap target and softened corners for tablet-friendly interaction. */}
               <button
                 type="submit"
-                className={`bg-white ${primaryTextClass} px-8 py-3 rounded-lg font-medium ${isThemed ? 'hover:bg-primary/10' : 'hover:bg-blue-600/10'} transition-colors`}
+                className={`bg-white ${primaryTextClass} px-8 py-3.5 md:py-4 rounded-2xl font-medium ${isThemed ? 'hover:bg-primary/10' : 'hover:bg-blue-600/10'} transition-colors`}
               >
                 Coba Gratis
               </button>

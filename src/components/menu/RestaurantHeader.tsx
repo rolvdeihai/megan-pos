@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { 
   ShoppingCartIcon, 
   PhoneIcon,
@@ -28,6 +29,7 @@ export default function RestaurantHeader({ restaurant, settings }: RestaurantHea
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isOpen, setIsOpen] = useState(true);
+  const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
     // Load cart from localStorage
@@ -64,6 +66,12 @@ export default function RestaurantHeader({ restaurant, settings }: RestaurantHea
 
     return () => clearInterval(timer);
   }, [restaurant, settings]);
+
+  useEffect(() => {
+    const onScroll = () => setScrollY(window.scrollY || 0);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const checkBusinessHours = () => {
     if (!settings?.business_hours) {
@@ -184,10 +192,21 @@ export default function RestaurantHeader({ restaurant, settings }: RestaurantHea
                     </span>
                   </div>
                 )}
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900">
+                <div
+                  // Tune parallax intensity here.
+                  style={{ transform: `translateY(${Math.min(scrollY * 0.08, 10)}px)` }}
+                >
+                  <motion.h1
+                    // Customize gradient animation speed/colors here.
+                    className="text-xl font-bold bg-clip-text text-transparent bg-[length:200%_200%]"
+                    style={{
+                      backgroundImage: `linear-gradient(120deg, ${settings?.primary_color || '#3B82F6'}, ${settings?.secondary_color || '#10B981'}, ${settings?.primary_color || '#3B82F6'})`,
+                    }}
+                    animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+                    transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                  >
                     {restaurant?.restaurant_name || 'Restoran'}
-                  </h1>
+                  </motion.h1>
                   <div className="flex items-center text-sm text-gray-600">
                     {isOpen ? (
                       <span className="flex items-center text-green-600">

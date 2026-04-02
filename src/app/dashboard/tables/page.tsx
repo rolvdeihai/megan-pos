@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { PlusIcon, PencilIcon, TrashIcon, QrCodeIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import QRCode from 'react-qr-code';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { getOwnerId } from '@/lib/user-scope';
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
+import { buildTableAvailability, getTableVisualStatus, type TableOrderStatus } from '@/lib/table-availability';
 
 type Table = {
   id: string;
@@ -27,6 +29,7 @@ type OrderInfo = {
 
 export default function TablesPage() {
   const [tables, setTables] = useState<Table[]>([]);
+  const [tableOrders, setTableOrders] = useState<TableOrderStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showQR, setShowQR] = useState<string | null>(null);
@@ -42,6 +45,8 @@ export default function TablesPage() {
   const [deletingTable, setDeletingTable] = useState<Table | null>(null);
   const [relatedOrders, setRelatedOrders] = useState<OrderInfo[]>([]);
   const [checkingOrders, setCheckingOrders] = useState(false);
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [currentSlotTime, setCurrentSlotTime] = useState<string>(() => new Date().toISOString());
 
   const { user } = useAuth();
   const ownerId = getOwnerId(user);
@@ -52,20 +57,42 @@ export default function TablesPage() {
     }
   }, [ownerId]);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentSlotTime(new Date().toISOString());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
   const fetchTables = async () => {
     if (!ownerId) return;
-    
-    const { data, error } = await supabase
-      .from('restaurant_tables')
-      .select('*')
-      .eq('user_id', ownerId)
-      .order('table_number');
 
-    if (!error) {
-      setTables(data || []);
+    const [{ data: tableData, error: tableError }, { data: orderData, error: orderError }] = await Promise.all([
+      supabase
+        .from('restaurant_tables')
+        .select('*')
+        .eq('user_id', ownerId)
+        .order('table_number'),
+      supabase
+        .from('orders')
+        .select('table_id, status, scheduled_time, created_at')
+        .eq('user_id', ownerId)
+        .not('status', 'in', '("completed","cancelled")')
+        .not('table_id', 'is', null),
+    ]);
+
+    if (!tableError) {
+      setTables(tableData || []);
     } else {
-      console.error('Error fetching tables:', error);
+      console.error('Error fetching tables:', tableError);
     }
+
+    if (!orderError) {
+      setTableOrders((orderData || []) as TableOrderStatus[]);
+    } else {
+      console.error('Error fetching table orders:', orderError);
+    }
+
     setLoading(false);
   };
 
@@ -282,6 +309,14 @@ export default function TablesPage() {
     img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
   };
 
+  const tableCards = useMemo(() => {
+    const availability = buildTableAvailability(tables, tableOrders, currentSlotTime);
+    return availability.map((table) => ({
+      ...table,
+      visual_status: getTableVisualStatus(table),
+    }));
+  }, [tables, tableOrders, currentSlotTime]);
+
   if (!user) {
     return (
       <div className="max-w-7xl mx-auto py-8">
@@ -408,7 +443,7 @@ export default function TablesPage() {
         </div>
       )}
 
-      {tables.length === 0 ? (
+      {tableCards.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl shadow">
           <div className="text-4xl mb-4">🪑</div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Belum ada meja</h3>
@@ -421,85 +456,166 @@ export default function TablesPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {tables.map((table) => (
-            <div
-              key={table.id}
-              className={`bg-white rounded-xl shadow p-6 border-2 ${
-                table.is_available
-                  ? 'border-green-200 hover:border-green-300'
-                  : 'border-red-200 hover:border-red-300'
-              }`}
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">
-                    {table.table_name || `Meja ${table.table_number}`}
-                  </h3>
-                  <div className="flex items-center mt-2 space-x-4">
-                    <span className="text-sm text-gray-600">
-                      No: {table.table_number}
-                    </span>
-                    <span className="text-sm text-gray-600">
-                      Kapasitas: {table.capacity} orang
-                    </span>
-                  </div>
-                  {table.qr_code && (
-                    <div className="mt-3 text-xs text-gray-500 truncate">
-                      QR: {new URL(table.qr_code).pathname}
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => toggleAvailability(table)}
-                  className={`px-3 py-1 text-xs rounded-full ${
-                    table.is_available
-                      ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                      : 'bg-red-100 text-red-800 hover:bg-red-200'
-                  }`}
-                >
-                  {table.is_available ? 'Tersedia' : 'Terisi'}
-                </button>
-              </div>
+        <LayoutGroup>
+          {/* Update table grid columns here. */}
+          <motion.div
+            layout
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+          >
+            <AnimatePresence mode="popLayout">
+              {tableCards.map((table) => {
+                const isAvailable = table.visual_status === 'available';
+                const isOccupied = table.visual_status === 'occupied';
+                const isReserved = table.visual_status === 'reserved';
 
-              <div className="flex justify-between items-center pt-4 border-t">
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => generateQRCode(table.id, table.table_number)}
-                    className="p-2 text-primary hover:bg-primary/10 rounded-lg"
-                    title="Generate QR Code"
+                return (
+                  <motion.div
+                    key={table.id}
+                    layout
+                    initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                    animate={
+                      isAvailable
+                        ? { opacity: 1, y: [0, -4, 0], scale: 1 }
+                        : { opacity: 1, y: 0, scale: 1 }
+                    }
+                    exit={{ opacity: 0, y: -12, scale: 0.98 }}
+                    transition={
+                      isAvailable
+                        ? {
+                            // Tune floating animation rhythm here.
+                            y: { repeat: Infinity, duration: 4, ease: 'easeInOut' },
+                            opacity: { duration: 0.2 },
+                            scale: { duration: 0.2 },
+                            layout: { duration: 0.3, ease: 'easeInOut' },
+                          }
+                        : { duration: 0.25, ease: 'easeOut', layout: { duration: 0.3 } }
+                    }
+                    whileTap={{
+                      scale: 0.9,
+                      // Tune tap spring feel here.
+                      transition: { type: 'spring', stiffness: 400, damping: 10 },
+                    }}
+                    onClick={() => setSelectedTableId(table.id)}
+                    className={`relative overflow-hidden rounded-2xl border bg-white/85 backdrop-blur-sm shadow-xl p-6 cursor-pointer transition-all ${
+                      selectedTableId === table.id
+                        ? 'ring-2 ring-primary/40 border-primary/40'
+                        : 'border-slate-200 hover:shadow-2xl'
+                    }`}
                   >
-                    <QrCodeIcon className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => startEdit(table)}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-                    title="Edit"
-                  >
-                    <PencilIcon className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="flex space-x-2">
-                  {table.qr_code && (
-                    <button
-                      onClick={() => setShowQR(table.qr_code)}
-                      className="px-3 py-1 text-xs bg-primary/10 text-primary hover:bg-primary/20 rounded-full"
-                    >
-                      Lihat QR
-                    </button>
-                  )}
-                  <button
-                    onClick={() => initiateDelete(table)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                    title="Hapus"
-                  >
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+                    {/* Occupied ring effect */}
+                    {isOccupied && (
+                      <div className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-red-300/70 animate-pulse" />
+                    )}
+
+                    {/* Reserved shimmering gradient border */}
+                    {isReserved && (
+                      <motion.div
+                        className="pointer-events-none absolute inset-0 rounded-2xl p-[1.5px]"
+                        style={{
+                          background:
+                            'linear-gradient(120deg, rgba(99,102,241,0.75), rgba(56,189,248,0.75), rgba(167,139,250,0.75), rgba(99,102,241,0.75))',
+                          backgroundSize: '220% 220%',
+                        }}
+                        // Adjust shimmer speed/colors here.
+                        animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+                        transition={{ duration: 3.2, repeat: Infinity, ease: 'linear' }}
+                      />
+                    )}
+
+                    <div className="relative z-10 flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900">
+                          {table.table_name || `Meja ${table.table_number}`}
+                        </h3>
+                        <div className="flex items-center mt-2 space-x-4">
+                          <span className="text-sm text-gray-600">
+                            No: {table.table_number}
+                          </span>
+                          <span className="text-sm text-gray-600">
+                            Kapasitas: {table.capacity} orang
+                          </span>
+                        </div>
+                        {table.qr_code && (
+                          <div className="mt-3 text-xs text-gray-500 truncate max-w-44">
+                            QR: {new URL(table.qr_code).pathname}
+                          </div>
+                        )}
+                        {table.has_upcoming_booking && table.next_booking_start && (
+                          <div className="mt-2 text-xs text-indigo-700">
+                            Reservasi berikut: {new Date(table.next_booking_start).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleAvailability(table);
+                        }}
+                        className={`px-3 py-1 text-xs rounded-full ${
+                          isAvailable
+                            ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                            : isOccupied
+                              ? 'bg-red-100 text-red-800 hover:bg-red-200'
+                              : 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200'
+                        }`}
+                      >
+                        {isAvailable ? 'Tersedia' : isOccupied ? 'Terisi' : 'Reservasi'}
+                      </button>
+                    </div>
+
+                    <div className="relative z-10 flex justify-between items-center pt-4 border-t">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            generateQRCode(table.id, table.table_number);
+                          }}
+                          className="p-2 text-primary hover:bg-primary/10 rounded-lg"
+                          title="Generate QR Code"
+                        >
+                          <QrCodeIcon className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEdit(table);
+                          }}
+                          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                          title="Edit"
+                        >
+                          <PencilIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="flex space-x-2">
+                        {table.qr_code && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowQR(table.qr_code);
+                            }}
+                            className="px-3 py-1 text-xs bg-primary/10 text-primary hover:bg-primary/20 rounded-full"
+                          >
+                            Lihat QR
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            initiateDelete(table);
+                          }}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                          title="Hapus"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </motion.div>
+        </LayoutGroup>
       )}
 
       {/* QR Code Modal */}
