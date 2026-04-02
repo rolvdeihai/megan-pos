@@ -5,8 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { CogIcon, BellIcon, CreditCardIcon, UserIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/components/auth/AuthProvider';
 import ThemeSettings from '@/components/settings/ThemeSettings';
-import { UserGroupIcon } from '@heroicons/react/24/outline';
 import OTPInput from '@/components/auth/OTPInput';
+import { AnimatePresence, motion } from 'framer-motion';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -383,6 +383,13 @@ export default function SettingsPage() {
     { key: 'sunday', label: 'Minggu' },
   ];
 
+  const settingsTabs = [
+    { id: 'general', label: 'Informasi Umum', icon: UserIcon },
+    { id: 'business', label: 'Pengaturan Bisnis', icon: CreditCardIcon },
+    { id: 'appearance', label: 'Tampilan', icon: CogIcon },
+    { id: 'notifications', label: 'Notifikasi', icon: BellIcon },
+  ] as const;
+
   if (authLoading || loading) return <div className="max-w-7xl mx-auto py-8 flex justify-center items-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
 
   if (!user) {
@@ -408,46 +415,32 @@ export default function SettingsPage() {
         <div className="lg:w-1/4">
           <div className="bg-white rounded-xl shadow p-4 sticky top-8">
             <nav className="space-y-2">
-              <button
-                onClick={() => setActiveTab('general')}
-                className={`w-full flex items-center px-4 py-3 rounded-lg text-left ${activeTab === 'general'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-              >
-                <UserIcon className="w-5 h-5 mr-3" />
-                Informasi Umum
-              </button>
-              <button
-                onClick={() => setActiveTab('business')}
-                className={`w-full flex items-center px-4 py-3 rounded-lg text-left ${activeTab === 'business'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-              >
-                <CreditCardIcon className="w-5 h-5 mr-3" />
-                Pengaturan Bisnis
-              </button>
-              <button
-                onClick={() => setActiveTab('appearance')}
-                className={`w-full flex items-center px-4 py-3 rounded-lg text-left ${activeTab === 'appearance'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-              >
-                <CogIcon className="w-5 h-5 mr-3" />
-                Tampilan
-              </button>
-              <button
-                onClick={() => setActiveTab('notifications')}
-                className={`w-full flex items-center px-4 py-3 rounded-lg text-left ${activeTab === 'notifications'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-              >
-                <BellIcon className="w-5 h-5 mr-3" />
-                Notifikasi
-              </button>
+              {settingsTabs.map((tab) => {
+                const isActive = activeTab === tab.id;
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`relative w-full flex items-center px-4 py-3 rounded-xl text-left transition-colors ${
+                      isActive ? 'text-primary' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {/* Adjust active tab pill style here. */}
+                    {isActive && (
+                      <motion.span
+                        layoutId="settings-active-pill"
+                        className="absolute inset-0 rounded-xl bg-primary/10 border border-primary/20"
+                        transition={{ type: 'spring', stiffness: 360, damping: 32 }}
+                      />
+                    )}
+                    <span className="relative z-10 flex items-center">
+                      <Icon className="w-5 h-5 mr-3" />
+                      {tab.label}
+                    </span>
+                  </button>
+                );
+              })}
             </nav>
 
             <div className="mt-8 pt-8 border-t">
@@ -505,22 +498,32 @@ export default function SettingsPage() {
 
         {/* Main Content */}
         <div className="lg:w-3/4">
+          <AnimatePresence mode="wait">
           {activeTab === 'general' && (
-            <div className="bg-white rounded-xl shadow p-8">
+            <motion.div
+              key="settings-general"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.24, ease: 'easeOut' }}
+              className="bg-white rounded-xl shadow p-8"
+            >
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Informasi Umum</h2>
 
               <form onSubmit={handleGeneralSubmit} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nama Restoran *
-                  </label>
+                <div className="relative pt-2">
                   <input
                     type="text"
                     required
                     value={generalForm.restaurant_name}
                     onChange={(e) => setGeneralForm({ ...generalForm, restaurant_name: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
+                    placeholder=" "
+                    className="peer w-full px-4 pt-5 pb-2.5 border border-gray-300 rounded-lg transition-all duration-200 focus:ring-4 focus:ring-primary/15 focus:border-primary"
                   />
+                  {/* Edit floating label behavior here. */}
+                  <label className="absolute left-4 top-5 text-sm text-gray-500 transition-all duration-200 pointer-events-none peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-primary peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-xs">
+                    Nama Restoran *
+                  </label>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -539,32 +542,32 @@ export default function SettingsPage() {
                     </p>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nomor Telepon *
-                    </label>
+                  <div className="relative pt-2">
                     <input
                       type="tel"
                       required
                       value={generalForm.phone}
                       onChange={(e) => setGeneralForm({ ...generalForm, phone: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
-                      placeholder="08xxxxxxxxxx"
+                      placeholder=" "
+                      className="peer w-full px-4 pt-5 pb-2.5 border border-gray-300 rounded-lg transition-all duration-200 focus:ring-4 focus:ring-primary/15 focus:border-primary"
                     />
+                    <label className="absolute left-4 top-5 text-sm text-gray-500 transition-all duration-200 pointer-events-none peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-primary peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-xs">
+                      Nomor Telepon *
+                    </label>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Alamat Restoran
-                  </label>
+                <div className="relative pt-2">
                   <textarea
                     value={generalForm.address}
                     onChange={(e) => setGeneralForm({ ...generalForm, address: e.target.value })}
                     rows={4}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
-                    placeholder="Alamat lengkap restoran"
+                    placeholder=" "
+                    className="peer w-full px-4 pt-6 pb-2.5 border border-gray-300 rounded-lg transition-all duration-200 focus:ring-4 focus:ring-primary/15 focus:border-primary"
                   />
+                  <label className="absolute left-4 top-5 text-sm text-gray-500 transition-all duration-200 pointer-events-none peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-primary peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-xs">
+                    Alamat Restoran
+                  </label>
                 </div>
 
                 {/* Change Password Section */}
@@ -677,11 +680,18 @@ export default function SettingsPage() {
                   </button>
                 </div>
               </form>
-            </div>
+            </motion.div>
           )}
 
           {activeTab === 'business' && (
-            <div className="bg-white rounded-xl shadow p-8">
+            <motion.div
+              key="settings-business"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.24, ease: 'easeOut' }}
+              className="bg-white rounded-xl shadow p-8"
+            >
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Pengaturan Bisnis</h2>
 
               <form onSubmit={handleBusinessSubmit} className="space-y-8">
@@ -828,15 +838,30 @@ export default function SettingsPage() {
                   </button>
                 </div>
               </form>
-            </div>
+            </motion.div>
           )}
 
           {activeTab === 'appearance' && (
-            <ThemeSettings />
+            <motion.div
+              key="settings-appearance"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.24, ease: 'easeOut' }}
+            >
+              <ThemeSettings />
+            </motion.div>
           )}
 
           {activeTab === 'notifications' && (
-            <div className="bg-white rounded-xl shadow p-8">
+            <motion.div
+              key="settings-notifications"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.24, ease: 'easeOut' }}
+              className="bg-white rounded-xl shadow p-8"
+            >
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Pengaturan Notifikasi</h2>
 
               <div className="space-y-6">
@@ -904,8 +929,9 @@ export default function SettingsPage() {
                   </button>
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

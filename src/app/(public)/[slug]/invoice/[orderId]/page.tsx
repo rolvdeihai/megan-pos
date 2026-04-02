@@ -187,10 +187,31 @@ export default function PublicInvoicePage() {
   const formatMoney = (amount: number) => `Rp ${amount.toLocaleString('id-ID')}`;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="public-invoice-page min-h-screen bg-gray-50">
+      <style jsx global>{`
+        @media print {
+          .public-invoice-page nav {
+            display: none !important;
+          }
+
+          .public-invoice-shell {
+            max-width: 100% !important;
+            padding: 0 !important;
+          }
+
+          .public-invoice-card {
+            box-shadow: none !important;
+            border: 0 !important;
+          }
+
+          .public-invoice-actions {
+            display: none !important;
+          }
+        }
+      `}</style>
       <Navbar mode="public" restaurant={restaurant} settings={settings} />
 
-      <div className="max-w-4xl mx-auto px-4 py-10">
+      <div className="public-invoice-shell max-w-4xl mx-auto px-4 py-10">
         {loading ? (
           <div className="bg-white rounded-xl shadow p-8 text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto" />
@@ -208,7 +229,7 @@ export default function PublicInvoicePage() {
             </button>
           </div>
         ) : invoice ? (
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+          <div className="public-invoice-card bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
             <div className="px-6 py-5 border-b bg-gray-50 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Invoice {invoice.order_number}</h1>
@@ -218,7 +239,7 @@ export default function PublicInvoicePage() {
                     : '-'}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="public-invoice-actions flex items-center gap-2">
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${invoice.payment_status === 'paid'
                   ? 'bg-green-100 text-green-800'
                   : 'bg-yellow-100 text-yellow-800'

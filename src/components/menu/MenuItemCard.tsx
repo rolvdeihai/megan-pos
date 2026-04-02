@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { PhotoIcon } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
 
 interface MenuItemCardProps {
   item: any;
@@ -12,8 +13,14 @@ interface MenuItemCardProps {
 export default function MenuItemCard({ item, restaurantSlug, settings }: MenuItemCardProps) {
   const [quantity, setQuantity] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
+  const isSoldOut = item.effective_is_available === false;
 
   const addToCart = () => {
+    if (isSoldOut) {
+      alert(item.sold_out_reason || 'Menu ini sedang habis');
+      return;
+    }
+
     const cart = JSON.parse(localStorage.getItem(`cart_${restaurantSlug}`) || '[]');
     const existingItem = cart.find((i: any) => i.id === item.id);
     
@@ -43,22 +50,36 @@ export default function MenuItemCard({ item, restaurantSlug, settings }: MenuIte
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow overflow-hidden">
+    <motion.div
+      // Customize premium animation timing/easing here.
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: 'easeOut' }}
+      whileHover={{ scale: 1.02 }}
+      className={`group relative overflow-hidden rounded-2xl border shadow-xl backdrop-blur-md transition-all duration-300 ${
+        isSoldOut
+          ? 'border-red-200/80 bg-white/80'
+          : 'border-white/40 bg-white/70 hover:border-primary/30'
+      }`}
+    >
+      {/* Customize gradient colors for premium border glow here. */}
+      <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white/40 via-transparent to-primary/10" />
+
       {item.image_url ? (
-        <div className="h-48 overflow-hidden">
+        <div className="h-48 overflow-hidden relative z-10">
           <img
             src={item.image_url}
             alt={item.name}
-            className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
         </div>
       ) : (
-        <div className="h-48 bg-gray-100 flex items-center justify-center">
+        <div className="h-48 bg-slate-100/90 flex items-center justify-center relative z-10">
           <PhotoIcon className="w-12 h-12 text-gray-400" />
         </div>
       )}
       
-      <div className="p-4">
+      <div className="relative z-10 p-4">
         <div className="flex justify-between items-start mb-2">
           <div className="flex-1">
             <h3 className="font-semibold text-gray-900 text-lg">{item.name}</h3>
@@ -98,8 +119,18 @@ export default function MenuItemCard({ item, restaurantSlug, settings }: MenuIte
         )}
 
         <div className="flex items-center justify-between mt-4">
-          <div className="text-lg font-bold text-primary">
-            Rp {item.price.toLocaleString()}
+          <div>
+            <div className="text-lg font-bold text-primary">
+              Rp {item.price.toLocaleString()}
+            </div>
+            <div className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${isSoldOut ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+              {isSoldOut ? 'Habis' : 'Tersedia'}
+            </div>
+            {isSoldOut && (
+              <div className="mt-2 text-xs text-red-600 max-w-40">
+                {item.sold_out_reason || 'Menu ini sedang habis'}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center space-x-2">
@@ -118,13 +149,17 @@ export default function MenuItemCard({ item, restaurantSlug, settings }: MenuIte
             )}
             <button
               onClick={addToCart}
-              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium text-sm"
+              disabled={isSoldOut}
+              className={`px-4 py-2 rounded-lg font-medium text-sm ${isSoldOut
+                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                : 'bg-primary text-white hover:bg-primary/90 shadow-sm hover:shadow-md'
+                }`}
             >
-              {quantity > 0 ? 'Tambah' : 'Tambah ke Keranjang'}
+              {isSoldOut ? 'Stok Habis' : quantity > 0 ? 'Tambah' : 'Tambah ke Keranjang'}
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
