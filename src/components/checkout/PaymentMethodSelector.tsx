@@ -1,69 +1,10 @@
 'use client';
 
-// Payment Method Selector using Xendit SDK supported methods
-// Docs: https://docs.xendit.co/payment-channels
-// SDK Ref: src/lib/xendit.ts - PAYMENT_METHODS
+// Payment Method Selector using payment gateway abstraction
+// Supports: simulate, xendit, midtrans
 
-interface PaymentMethod {
-  id: string;
-  name: string;
-  category: 'va' | 'qris' | 'ewallet';
-  icon: string;
-  description: string;
-}
-
-// Payment method IDs must match Xendit SDK payment channel codes
-const paymentMethods: PaymentMethod[] = [
-  {
-    id: 'BCA',
-    name: 'BCA Virtual Account',
-    category: 'va',
-    icon: '🏦',
-    description: 'Transfer dari BCA',
-  },
-  {
-    id: 'BNI',
-    name: 'BNI Virtual Account',
-    category: 'va',
-    icon: '🏦',
-    description: 'Transfer dari BNI',
-  },
-  {
-    id: 'MANDIRI',
-    name: 'Mandiri Virtual Account',
-    category: 'va',
-    icon: '🏦',
-    description: 'Transfer dari Mandiri',
-  },
-  {
-    id: 'QRIS',
-    name: 'QRIS',
-    category: 'qris',
-    icon: '📱',
-    description: 'Scan QR dengan aplikasi pembayaran',
-  },
-  {
-    id: 'DANA',
-    name: 'DANA',
-    category: 'ewallet',
-    icon: '💳',
-    description: 'Bayar dengan DANA',
-  },
-  {
-    id: 'OVO',
-    name: 'OVO',
-    category: 'ewallet',
-    icon: '💳',
-    description: 'Bayar dengan OVO',
-  },
-  {
-    id: 'LINKAJA',
-    name: 'LinkAja',
-    category: 'ewallet',
-    icon: '💳',
-    description: 'Bayar dengan LinkAja',
-  },
-];
+import { PAYMENT_METHODS } from '@/lib/payment-gateway';
+import type { PaymentMethod } from '@/lib/payment-gateway';
 
 interface PaymentMethodSelectorProps {
   selected: string;
@@ -71,9 +12,9 @@ interface PaymentMethodSelectorProps {
 }
 
 export function PaymentMethodSelector({ selected, onSelect }: PaymentMethodSelectorProps) {
-  const vaMethods = paymentMethods.filter((m) => m.category === 'va');
-  const qrisMethod = paymentMethods.filter((m) => m.category === 'qris');
-  const ewalletMethods = paymentMethods.filter((m) => m.category === 'ewallet');
+  const vaMethods = PAYMENT_METHODS.filter((m) => m.category === 'va');
+  const qrisMethod = PAYMENT_METHODS.filter((m) => m.category === 'qris');
+  const ewalletMethods = PAYMENT_METHODS.filter((m) => m.category === 'ewallet');
 
   const MethodCard = ({ method }: { method: PaymentMethod }) => (
     <button

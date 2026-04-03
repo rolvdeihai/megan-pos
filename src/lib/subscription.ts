@@ -83,7 +83,7 @@ export async function createPendingSubscription(
 export async function activateSubscription(
   subscriptionId: string,
   paymentDetails: {
-    xendit_invoice_id: string;
+    payment_proof_url: string; // Generic payment proof (xendit_invoice_id, midtrans_transaction_id, etc.)
     payment_method?: string;
     paid_at?: string;
   }
@@ -115,7 +115,7 @@ export async function activateSubscription(
       status: 'active',
       start_date: now.toISOString(),
       end_date: endDate.toISOString(),
-      payment_proof_url: paymentDetails.xendit_invoice_id,
+      payment_proof_url: paymentDetails.payment_proof_url,
     })
     .eq('id', subscriptionId);
 
