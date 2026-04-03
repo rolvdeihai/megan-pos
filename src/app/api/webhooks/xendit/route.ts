@@ -1,10 +1,9 @@
 // src/app/api/webhooks/xendit/route.ts
-// Xendit webhook handler using official SDK types
+// Xendit webhook handler using payment gateway abstraction
 // Docs: https://developers.xendit.co/api-reference/#invoice-callback
 
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyWebhookSignature, isSimulationMode, parseWebhookPayload } from '@/lib/xendit';
-import type { InvoiceCallback } from '@/lib/xendit';
+import { verifyWebhookSignature, isSimulationMode, parseWebhookPayload } from '@/lib/payment-gateway';
 import {
   activateSubscription,
   expirePendingSubscription,
@@ -21,39 +20,38 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
-    // Parse payload using SDK-compatible types
-    const data: InvoiceCallback = parseWebhookPayload(payload);
+    // Parse payload using abstraction layer
+    const data = parseWebhookPayload(payload);
 
     console.log('Xendit webhook received:', {
-      external_id: data.externalId,
+      external_id: data.external_id,
       status: data.status,
-      payment_method: data.paymentMethod,
-      payment_channel: data.paymentChannel,
+      payment_method: data.payment_method,
+      payment_channel: data.payment_channel,
     });
 
     // Handle based on status
-    // Docs: https://developers.xendit.co/api-reference/#invoice-status
     switch (data.status) {
       case 'PAID': {
-        await activateSubscription(data.externalId, {
-          xendit_invoice_id: data.id,
-          payment_method: data.paymentMethod || data.paymentChannel || 'UNKNOWN',
-          paid_at: data.paidAt,
+        await activateSubscription(data.external_id, {
+          payment_proof_url: data.gateway_id,
+          payment_method: data.payment_method || data.payment_channel || 'UNKNOWN',
+          paid_at: data.paid_at,
         });
-        console.log('Subscription activated:', data.externalId);
+        console.log('Subscription activated:', data.external_id);
         break;
       }
 
       case 'EXPIRED': {
-        await expirePendingSubscription(data.externalId);
-        console.log('Subscription expired:', data.externalId);
+        await expirePendingSubscription(data.external_id);
+        console.log('Subscription expired:', data.external_id);
         break;
       }
 
       case 'PENDING':
+      case 'FAILED':
       default: {
-        // No action needed for pending
-        console.log('Payment pending:', data.externalId);
+        console.log('Payment status:', data.status, data.external_id);
         break;
       }
     }
@@ -61,8 +59,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error('Webhook error:', error);
-    // Return 200 to prevent Xendit retries for unrecoverable errors
-    // Log error for monitoring instead
+    // Return 200 to prevent retries for unrecoverable errors
     return NextResponse.json({ received: true, error: 'Processing failed' });
   }
 }

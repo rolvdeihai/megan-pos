@@ -1,10 +1,14 @@
 // src/app/dashboard/billing/actions.ts
-// Xendit SDK Billing Actions
+// Payment Gateway Billing Actions
+// Supports: simulate, xendit, midtrans
 
 'use server';
 
-import { createXenditInvoice, isSimulationMode } from '@/lib/xendit';
-import type { Invoice } from '@/lib/xendit';
+import {
+  createInvoice,
+  isSimulationMode,
+  getPaymentGateway,
+} from '@/lib/payment-gateway';
 import {
   validateSubscriptionChange,
   createPendingSubscription,
@@ -46,15 +50,17 @@ export async function createPaymentInvoice(
     // Create pending subscription
     const subscription = await createPendingSubscription(userId, packageId);
 
-    // Create Xendit invoice using SDK
-    // Docs: https://developers.xendit.co/api-reference/#create-invoice
-    const invoice: Invoice = await createXenditInvoice({
+    // Create payment invoice via abstraction layer
+    const gateway = getPaymentGateway();
+    const webhookPath = gateway === 'midtrans' ? '/api/webhooks/midtrans' : '/api/webhooks/xendit';
+
+    const invoice = await createInvoice({
       external_id: subscription.id,
       amount: validation.targetPackage.price,
       description: `Berlangganan ${validation.targetPackage.name} - Megan POS`,
       success_redirect_url: `${BASE_URL}/dashboard/billing?status=success&order_id=${subscription.id}`,
       failure_redirect_url: `${BASE_URL}/dashboard/billing?status=failed&order_id=${subscription.id}`,
-      callback_url: `${BASE_URL}/api/webhooks/xendit`,
+      callback_url: `${BASE_URL}${webhookPath}`,
       currency: 'IDR',
       invoice_duration: 86400, // 24 hours
       customer: {
@@ -93,11 +99,10 @@ export async function simulatePaymentSuccess(
   }
 
   try {
-    // Directly call the webhook handler logic
     const { activateSubscription } = await import('@/lib/subscription');
 
     await activateSubscription(subscriptionId, {
-      xendit_invoice_id: `sim_invoice_${Date.now()}`,
+      payment_proof_url: `sim_invoice_${Date.now()}`,
       payment_method: 'SIMULATED',
       paid_at: new Date().toISOString(),
     });

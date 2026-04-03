@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider'; // Import useAuth
-import { isSimulationMode } from '@/lib/xendit';
+import { isSimulationMode, getPaymentGateway } from '@/lib/payment-gateway';
 import { simulatePaymentSuccess, simulatePaymentFailure } from './actions';
 import toast from 'react-hot-toast';
 
@@ -311,7 +311,7 @@ export default function BillingPage() {
         <p className="mt-4 text-sm text-gray-500">
           {isSimulationMode()
             ? '🧪 Mode simulasi aktif - tidak ada pembayaran nyata'
-            : 'Pembayaran aman melalui Xendit (VA, QRIS, E-wallet)'}
+            : `Pembayaran aman melalui ${getPaymentGateway() === 'midtrans' ? 'Midtrans' : 'Xendit'} (VA, QRIS, E-wallet)`}
         </p>
       </div>
     </div>
