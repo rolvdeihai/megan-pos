@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { DocumentArrowUpIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { DocumentArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import Tesseract from 'tesseract.js';
+import { AnimatePresence, motion } from 'framer-motion';
 
 type ParsedInventoryItem = {
   name: string;
@@ -34,6 +35,15 @@ type InventoryItem = {
   last_restocked: string;
   transactions_connected: boolean;
   expense_payment_method: string;
+};
+
+// Adjust entrance stagger timing here.
+const inventoryListVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.05, delayChildren: 0.04 },
+  },
 };
 
 export default function InventoryPage() {
@@ -225,6 +235,52 @@ export default function InventoryPage() {
     }
   };
 
+  const createInventoryExpenseTransaction = async ({
+    inventoryId,
+    itemName,
+    quantity,
+    unit,
+    costPerUnit,
+    paymentMethod,
+    supplier,
+    notePrefix,
+  }: {
+    inventoryId?: string;
+    itemName: string;
+    quantity: number;
+    unit: string;
+    costPerUnit: number;
+    paymentMethod: string;
+    supplier?: string;
+    notePrefix: string;
+  }) => {
+    if (!user?.id || quantity <= 0) return;
+
+    const amount = Math.max(0, quantity * costPerUnit);
+    const transactionData: Record<string, any> = {
+      user_id: user.id,
+      transaction_number: `EXP-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`,
+      type: 'expense',
+      amount,
+      payment_method: paymentMethod || 'cash',
+      status: 'completed',
+      notes: `${notePrefix} "${itemName}" sebanyak ${quantity} ${unit}${supplier ? ` dari supplier ${supplier}` : ''}`,
+      created_at: new Date().toISOString(),
+    };
+
+    if (inventoryId) {
+      transactionData.inventory_id = inventoryId;
+    }
+
+    const { error } = await supabase
+      .from('transactions')
+      .insert(transactionData as any);
+
+    if (error) {
+      throw error;
+    }
+  };
+
   const saveSingleInventoryItem = async (item: TempInventoryItem): Promise<void> => {
     const payload = {
       sku: item.sku,
@@ -241,11 +297,26 @@ export default function InventoryPage() {
       user_id: user?.id,
     };
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('inventory')
-      .insert(payload);
+      .insert(payload)
+      .select('id')
+      .single();
 
     if (error) throw error;
+
+    if (item.transactions_connected && item.current_stock > 0) {
+      await createInventoryExpenseTransaction({
+        inventoryId: data?.id,
+        itemName: item.name,
+        quantity: item.current_stock,
+        unit: item.unit,
+        costPerUnit: item.cost_per_unit,
+        paymentMethod: item.expense_payment_method,
+        supplier: item.supplier,
+        notePrefix: 'Pembelian stok awal inventory',
+      });
+    }
   };
 
   const handleBulkSave = async () => {
@@ -558,22 +629,68 @@ export default function InventoryPage() {
     };
 
     let error = null;
+    let expenseToCreate: null | {
+      inventoryId?: string;
+      itemName: string;
+      quantity: number;
+      unit: string;
+      costPerUnit: number;
+      paymentMethod: string;
+      supplier?: string;
+      notePrefix: string;
+    } = null;
+
     if (editingId) {
+      const existingItem = items.find(item => item.id === editingId);
+      const previousStock = existingItem?.current_stock || 0;
+      const stockIncrease = Math.max(0, formData.current_stock - previousStock);
+
       // Update existing item
       const { error: updateError } = await supabase
         .from('inventory')
         .update(payload)
         .eq('id', editingId);
       error = updateError;
+
+      if (!updateError && formData.transactions_connected && stockIncrease > 0) {
+        expenseToCreate = {
+          inventoryId: editingId,
+          itemName: formData.name,
+          quantity: stockIncrease,
+          unit: formData.unit,
+          costPerUnit: formData.cost_per_unit,
+          paymentMethod: formData.expense_payment_method,
+          supplier: formData.supplier,
+          notePrefix: 'Restock inventory',
+        };
+      }
     } else {
       // Insert new item
-      const { error: insertError } = await supabase
+      const { data: insertedItem, error: insertError } = await supabase
         .from('inventory')
-        .insert(payload);
+        .insert(payload)
+        .select('id')
+        .single();
       error = insertError;
+
+      if (!insertError && formData.transactions_connected && formData.current_stock > 0) {
+        expenseToCreate = {
+          inventoryId: insertedItem?.id,
+          itemName: formData.name,
+          quantity: formData.current_stock,
+          unit: formData.unit,
+          costPerUnit: formData.cost_per_unit,
+          paymentMethod: formData.expense_payment_method,
+          supplier: formData.supplier,
+          notePrefix: 'Pembelian stok awal inventory',
+        };
+      }
     }
 
     if (!error) {
+      if (expenseToCreate) {
+        await createInventoryExpenseTransaction(expenseToCreate);
+      }
       resetForm();
       fetchInventory();
     } else {
@@ -593,7 +710,21 @@ export default function InventoryPage() {
         last_restocked: adjustment > 0 ? new Date().toISOString() : item.last_restocked,
       })
       .eq('id', id);
-    if (!error) fetchInventory();
+    if (!error) {
+      if (adjustment > 0 && item.transactions_connected) {
+        await createInventoryExpenseTransaction({
+          inventoryId: item.id,
+          itemName: item.name,
+          quantity: adjustment,
+          unit: item.unit,
+          costPerUnit: item.cost_per_unit,
+          paymentMethod: item.expense_payment_method,
+          supplier: item.supplier,
+          notePrefix: 'Restock inventory',
+        });
+      }
+      fetchInventory();
+    }
     else {
       console.error('Error updating stock:', error);
       alert('Gagal update stock');
@@ -602,7 +733,7 @@ export default function InventoryPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="max-w-7xl mx-auto py-8">
+      <div className="py-4 sm:py-6">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Memuat data inventory...</p>
@@ -613,7 +744,7 @@ export default function InventoryPage() {
 
   if (!user) {
     return (
-      <div className="max-w-7xl mx-auto py-8">
+      <div className="py-4 sm:py-6">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Anda belum login</h2>
           <p className="text-gray-600">Silakan login untuk mengelola inventory.</p>
@@ -644,9 +775,11 @@ export default function InventoryPage() {
   }
 
   const lowStockItems = items.filter(item => item.current_stock <= item.minimum_stock);
+  // Edit low stock threshold here (ratio to minimum stock).
+  const STOCK_BAR_RATIO = 2;
 
   return (
-    <div className="max-w-7xl mx-auto py-8">
+    <div className="py-4 sm:py-6">
       <div className="flex space-x-3">
         <button
           onClick={() => document.getElementById('inventory-image-upload')?.click()}
@@ -841,103 +974,120 @@ export default function InventoryPage() {
       )}
 
       <div className="bg-white shadow rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                SKU
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Nama Item
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Stock
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Min Stock
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Harga Beli
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Supplier
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Aksi
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {items.map((item) => (
-              <tr
-                key={item.id}
-                className={item.current_stock <= item.minimum_stock ? 'bg-red-50' : ''}
-              >
-                <td className="px-6 py-4 whitespace-nowrap font-mono text-sm">
-                  {item.sku}
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-sm font-medium text-gray-900">
-                    {item.name}
-                  </div>
-                  <div className="text-sm text-gray-500">{item.category}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <span className="text-sm font-medium">
-                      {item.current_stock} {item.unit}
-                    </span>
-                    {item.current_stock <= item.minimum_stock && (
-                      <span className="ml-2 px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
-                        Rendah
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {item.minimum_stock} {item.unit}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  Rp {item.cost_per_unit.toLocaleString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {item.supplier}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex flex-col sm:flex-row gap-2 items-start">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => updateStock(item.id, 1)}
-                        className="px-2 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-semibold"
-                      >
-                        +1
-                      </button>
-                      <button
-                        onClick={() => updateStock(item.id, -1)}
-                        className="px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={item.current_stock <= 0}
-                      >
-                        -1
-                      </button>
-                      <button
-                        onClick={() => updateStock(item.id, 10)}
-                        className="px-2 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-semibold"
-                      >
-                        +10
-                      </button>
+        <div className="hidden lg:grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider">
+          <div className="col-span-2">SKU</div>
+          <div className="col-span-3">Nama Item</div>
+          <div className="col-span-3">Stock</div>
+          <div className="col-span-1">Min</div>
+          <div className="col-span-1">Harga</div>
+          <div className="col-span-2">Aksi</div>
+        </div>
+
+        <motion.div
+          variants={inventoryListVariants}
+          initial="hidden"
+          animate="visible"
+          className="divide-y divide-gray-200"
+        >
+          <AnimatePresence initial={false}>
+            {items.map((item) => {
+              const isLowStock = item.current_stock <= item.minimum_stock;
+              const stockDenominator = Math.max(item.minimum_stock * STOCK_BAR_RATIO, 1);
+              const stockPercent = Math.min(100, Math.max(0, (item.current_stock / stockDenominator) * 100));
+
+              return (
+                <motion.div
+                  key={item.id}
+                  layout
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                  className={`px-6 py-4 transition-all duration-200 hover:shadow-md hover:translate-x-1 ${
+                    isLowStock ? 'bg-red-50/60' : 'bg-white'
+                  }`}
+                >
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+                    <div className="lg:col-span-2 font-mono text-sm text-gray-700">{item.sku}</div>
+
+                    <div className="lg:col-span-3">
+                      <div className="text-sm font-medium text-gray-900">{item.name}</div>
+                      <div className="text-xs text-gray-500">{item.category}</div>
                     </div>
-                    <button
-                      onClick={() => handleEdit(item)}
-                      className="px-2 py-1 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded text-xs font-semibold"
-                    >
-                      Edit
-                    </button>
+
+                    <div className="lg:col-span-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900">
+                          {item.current_stock} {item.unit}
+                        </span>
+                        {isLowStock && (
+                          <motion.span
+                            // Tweak warning icon animation here.
+                            animate={{ x: [0, -1, 1, -1, 1, 0] }}
+                            transition={{ duration: 0.7, repeat: Infinity, repeatDelay: 1.8, ease: 'easeInOut' }}
+                            className="inline-flex text-amber-600"
+                            title="Stok rendah"
+                          >
+                            <ExclamationTriangleIcon className="w-4 h-4" />
+                          </motion.span>
+                        )}
+                      </div>
+
+                      <div className="mt-2 h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                        <motion.div
+                          // Edit stock bar fill behavior here.
+                          initial={{ width: '0%' }}
+                          animate={{ width: `${stockPercent}%` }}
+                          transition={{ duration: 0.8, ease: 'easeOut' }}
+                          className={`h-full rounded-full ${isLowStock ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-1 text-sm text-gray-700">
+                      {item.minimum_stock} {item.unit}
+                    </div>
+
+                    <div className="lg:col-span-1 text-sm text-gray-700">
+                      Rp {item.cost_per_unit.toLocaleString()}
+                    </div>
+
+                    <div className="lg:col-span-2">
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <button
+                          onClick={() => updateStock(item.id, 1)}
+                          className="px-2 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-semibold"
+                        >
+                          +1
+                        </button>
+                        <button
+                          onClick={() => updateStock(item.id, -1)}
+                          className="px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={item.current_stock <= 0}
+                        >
+                          -1
+                        </button>
+                        <button
+                          onClick={() => updateStock(item.id, 10)}
+                          className="px-2 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-semibold"
+                        >
+                          +10
+                        </button>
+                        <button
+                          onClick={() => handleEdit(item)}
+                          className="px-2 py-1 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded text-xs font-semibold"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      <div className="mt-1 text-xs text-gray-500 truncate">{item.supplier || '-'}</div>
+                    </div>
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </motion.div>
       </div>
       {showBulkModal && (
         <BulkInventoryImportModal

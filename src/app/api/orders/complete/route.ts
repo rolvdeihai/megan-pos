@@ -13,10 +13,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if transaction already exists
-    const { data: existingTx, error: checkError } = await supabaseAdmin
+    const { data: existingTx } = await supabaseAdmin
       .from('transactions')
       .select('id')
       .eq('order_id', orderId)
+      .eq('type', 'sale')
       .maybeSingle();
 
     // Get order details
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
           status: 'completed',
           completed_at: new Date().toISOString(),
           payment_status: 'paid',
+          payment_method: paymentMethod || order.payment_method || 'cash',
         })
         .eq('id', orderId);
 
@@ -87,6 +89,7 @@ export async function POST(request: NextRequest) {
         status: 'completed',
         completed_at: new Date().toISOString(),
         payment_status: 'paid',
+        payment_method: paymentMethod || order.payment_method || 'cash',
       })
       .eq('id', orderId);
 
@@ -103,36 +106,6 @@ export async function POST(request: NextRequest) {
         .from('restaurant_tables')
         .update({ is_available: true })
         .eq('id', order.table_id);
-    }
-
-    // Create transaction record
-    const { error: transactionError } = await supabaseAdmin
-      .from('transactions')
-      .insert({
-        user_id: userId,
-        order_id: orderId,
-        transaction_number: `TRX-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`,
-        type: 'sale',
-        amount: order.total_amount || 0,
-        payment_method: paymentMethod || 'cash',
-        status: 'completed',
-        notes: `Pembayaran untuk order ${order.order_number}`,
-      });
-
-    if (transactionError) {
-      // Handle unique constraint violation (rare race condition)
-      if (transactionError.code === '23505') {
-        return NextResponse.json({
-          success: true,
-          message: 'Transaksi sudah ada (race condition)',
-          duplicate: true,
-          shouldProcessInventory: true, // client must process inventory
-        });
-      }
-      return NextResponse.json(
-        { error: transactionError.message },
-        { status: 500 }
-      );
     }
 
     return NextResponse.json({

@@ -11,7 +11,7 @@ import {
   CheckIcon,
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
-import PermissionSelector from '@/components/roles/PermissionSelector';
+import { motion } from 'framer-motion';
 
 interface Permission {
   code: string;
@@ -198,6 +198,16 @@ export default function RolesPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const togglePermission = (code: string) => {
+    const exists = formData.permission_codes.includes(code);
+    setFormData({
+      ...formData,
+      permission_codes: exists
+        ? formData.permission_codes.filter((c) => c !== code)
+        : [...formData.permission_codes, code],
+    });
   };
 
   if (loading) {
@@ -406,11 +416,38 @@ export default function RolesPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-3">
                     Permissions *
                   </label>
-                  <PermissionSelector
-                    permissions={permissions}
-                    selectedCodes={formData.permission_codes}
-                    onChange={(codes) => setFormData({ ...formData, permission_codes: codes })}
-                  />
+                  <div className="space-y-2">
+                    {permissions.map((permission) => {
+                      const enabled = formData.permission_codes.includes(permission.code);
+                      return (
+                        <div
+                          key={permission.code}
+                          className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 bg-slate-50/60"
+                        >
+                          <div className="pr-4">
+                            <p className="text-sm font-semibold text-slate-900">{permission.label}</p>
+                            <p className="text-xs text-slate-500">{permission.description || permission.code}</p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => togglePermission(permission.code)}
+                            // Customize switch color/theme here.
+                            className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-300 ${
+                              enabled ? 'bg-gradient-to-r from-primary to-blue-500' : 'bg-slate-300'
+                            }`}
+                          >
+                            <motion.span
+                              className="inline-block h-6 w-6 rounded-full bg-white shadow"
+                              // Tune spring behavior here.
+                              animate={{ x: enabled ? 30 : 2 }}
+                              transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+                            />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </form>
             </div>

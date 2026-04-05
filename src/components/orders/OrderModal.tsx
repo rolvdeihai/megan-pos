@@ -1,13 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { XMarkIcon, PlusIcon, MinusIcon } from '@heroicons/react/24/outline';
+import { buildTableAvailability, type TableOrderStatus } from '@/lib/table-availability';
+import { combineReservationDateTime, getLocalDateInput, getLocalTimeInput } from '@/lib/reservation-datetime';
+import { motion } from 'framer-motion';
 
 interface MenuItem {
   id: string;
   name: string;
   price: number;
   is_available: boolean;
+  effective_is_available?: boolean;
+  sold_out_reason?: string | null;
+  ingredient_stock_issue?: boolean;
   preparation_time?: number;
   category_id?: string;
 }
@@ -27,6 +33,7 @@ interface Table {
 
 interface OrderModalProps {
   tables: Table[];
+  activeTableOrders?: TableOrderStatus[];
   menuItems: MenuItem[];
   categories: Category[];
   settings?: {
@@ -47,6 +54,7 @@ interface CartItem extends MenuItem {
 
 export default function OrderModal({
   tables,
+  activeTableOrders = [],
   menuItems,
   categories,
   settings,
@@ -62,13 +70,34 @@ export default function OrderModal({
   const [notes, setNotes] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
-  const [selectedTime, setSelectedTime] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateInput());
+  const [selectedHour, setSelectedHour] = useState<string>(() => getLocalTimeInput());
 
   const filteredItems = selectedCategoryId === 'all'
     ? menuItems
     : menuItems.filter(item => item.category_id === selectedCategoryId);
 
+  const selectedTime = combineReservationDateTime(selectedDate, selectedHour);
+  const effectiveSelectedTime = selectedTime || combineReservationDateTime(getLocalDateInput(), getLocalTimeInput());
+  const tableOptions = useMemo(
+    () => buildTableAvailability(tables, activeTableOrders, effectiveSelectedTime),
+    [tables, activeTableOrders, effectiveSelectedTime]
+  );
+
+  useEffect(() => {
+    if (!selectedTable) return;
+    const selectedTableOption = tableOptions.find((table) => table.id === selectedTable);
+    if (selectedTableOption && !selectedTableOption.is_selectable) {
+      setSelectedTable('');
+    }
+  }, [selectedTable, tableOptions]);
+
   const addToCart = (item: MenuItem) => {
+    if (item.effective_is_available === false) {
+      alert(item.sold_out_reason || 'Menu ini sedang habis');
+      return;
+    }
+
     setCart(prev => {
       const existing = prev.find(i => i.id === item.id);
       if (existing) {
@@ -129,6 +158,12 @@ export default function OrderModal({
       return;
     }
 
+    const unavailableItem = cart.find((item) => item.effective_is_available === false);
+    if (unavailableItem) {
+      alert(unavailableItem.sold_out_reason || `${unavailableItem.name} sedang habis`);
+      return;
+    }
+
     if (orderType === 'dine_in' && !selectedTable) {
       alert('Pilih meja untuk order dine-in');
       return;
@@ -151,7 +186,9 @@ export default function OrderModal({
       customer_phone: customerPhone && customerPhone.trim() !== '' ? customerPhone : null,
       delivery_address: orderType === 'delivery' ? deliveryAddress : null,
       notes,
-      scheduled_time: orderType === 'dine_in' ? (selectedTime || new Date().toISOString().slice(0, 16)) : null,
+      scheduled_time: orderType === 'dine_in'
+        ? (selectedTime || combineReservationDateTime(getLocalDateInput(), getLocalTimeInput()))
+        : null,
       items: cart.map(item => ({
         id: item.id,
         name: item.name,
@@ -165,12 +202,26 @@ export default function OrderModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+    <motion.div
+      // Customize modal backdrop animation here.
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
+    >
+      <motion.div
+        // Customize modal scale/fade animation here.
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.98 }}
+        transition={{ duration: 0.26, ease: 'easeOut' }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-[1200px] h-[92vh] flex flex-col overflow-hidden"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Order Baru</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Order Baru</h2>
             <p className="text-sm text-gray-600">Buat order untuk customer</p>
           </div>
           <button
@@ -181,16 +232,16 @@ export default function OrderModal({
           </button>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
           {/* Left Panel - Menu Items */}
-          <div className="w-2/3 border-r overflow-y-auto">
-            <div className="p-6">
+          <div className="w-full lg:w-2/3 border-b lg:border-b-0 lg:border-r overflow-y-auto">
+            <div className="p-4 sm:p-6">
               {/* Order Type Selection */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-3">
                   Tipe Order
                 </label>
-                <div className="flex space-x-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     { value: 'dine_in', label: 'Dine In', icon: '🍽️' },
                     { value: 'takeaway', label: 'Takeaway', icon: '🥡' },
@@ -216,54 +267,119 @@ export default function OrderModal({
               <div className="mb-6 space-y-4">
                 {orderType === 'dine_in' && (
                   <>
-                    {/* Table selection (existing code) */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Tanggal Reservasi
+                      </label>
+                      <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
+                        min={getLocalDateInput()}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Jam Reservasi
+                      </label>
+                      <input
+                        type="time"
+                        value={selectedHour}
+                        onChange={(e) => setSelectedHour(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Tanggal otomatis hari ini, tinggal pilih jam jika perlu diubah.
+                      </p>
+                    </div>
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Pilih Meja
                       </label>
-                      {tables.length === 0 ? (
+                      {tableOptions.length === 0 ? (
                         <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
                           Tidak ada meja yang tersedia. Harap tambahkan meja di menu Kelola Meja, atau selesaikan pesanan dine-in yang sedang aktif.
                         </div>
                       ) : (
-                        <select
-                          value={selectedTable}
-                          onChange={(e) => setSelectedTable(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
-                          required
-                        >
-                          <option value="">Pilih Meja</option>
-                          {tables.map(table => (
-                            <option
-                              key={table.id}
-                              value={table.id}
-                              disabled={!table.is_available}
-                            >
-                              {table.table_name || `Meja ${table.table_number}`} (Max {table.capacity} orang)
-                              {!table.is_available && ' - Tidak Tersedia'}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {tableOptions.map((table) => {
+                            const isSelected = selectedTable === table.id;
+                            return (
+                              <button
+                                key={table.id}
+                                type="button"
+                                onClick={() => table.is_selectable && setSelectedTable(table.id)}
+                                disabled={!table.is_selectable}
+                                className={`rounded-xl border p-4 text-left transition ${isSelected
+                                  ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
+                                  : table.is_selectable
+                                    ? 'border-gray-200 hover:border-primary/40 hover:shadow-sm'
+                                    : 'border-amber-200 bg-amber-50/70 opacity-90'
+                                  } ${!table.is_selectable ? 'cursor-not-allowed' : ''}`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="font-semibold text-gray-900">
+                                      {table.table_name || `Meja ${table.table_number}`}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                      Kapasitas {table.capacity} orang
+                                    </p>
+                                  </div>
+                                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${table.is_selectable
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                    {table.availability_label}
+                                  </span>
+                                </div>
 
-                    {/* Scheduled time picker */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Waktu Reservasi (opsional, default sekarang)
-                      </label>
-                      <input
-                        type="datetime-local"
-                        value={selectedTime}
-                        onChange={(e) => setSelectedTime(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
-                      />
+                                <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                    Slot Dipilih
+                                  </p>
+                                  <p className="mt-1 text-sm font-medium text-slate-900">
+                                    {table.selected_slot_label}
+                                  </p>
+                                </div>
+
+                                <div className="mt-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                    Jadwal Terpakai
+                                  </p>
+                                  {table.today_booking_ranges.length > 0 ? (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      {table.today_booking_ranges.map((range) => (
+                                        <span
+                                          key={`${table.id}-${range}`}
+                                          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
+                                        >
+                                          {range}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="mt-1 text-xs text-gray-500">Kosong sepanjang hari.</p>
+                                  )}
+                                </div>
+
+                                {table.availability_hint && (
+                                  <p className="mt-3 text-xs text-gray-600">{table.availability_hint}</p>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
 
                 {(orderType === 'takeaway' || orderType === 'delivery') && (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Nama Customer
@@ -354,11 +470,14 @@ export default function OrderModal({
               </div>
 
               {/* Menu Items Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filteredItems.map(item => (
                   <div
                     key={item.id}
-                    className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                    className={`border rounded-lg p-4 transition-shadow ${item.effective_is_available === false
+                      ? 'bg-gray-50 border-red-200'
+                      : 'hover:shadow-md'
+                      }`}
                   >
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
@@ -371,20 +490,31 @@ export default function OrderModal({
                             ⏱️ {item.preparation_time} menit
                           </p>
                         )}
+                        {item.effective_is_available === false && (
+                          <p className="text-xs text-red-600 mt-2">
+                            {item.sold_out_reason || 'Menu ini sedang habis'}
+                          </p>
+                        )}
                       </div>
                       <button
                         onClick={() => addToCart(item)}
-                        className="ml-2 p-2 bg-primary/10 text-primary rounded-full hover:bg-primary/20"
+                        disabled={item.effective_is_available === false}
+                        className={`ml-2 p-2 rounded-full ${item.effective_is_available === false
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                          : 'bg-primary/10 text-primary hover:bg-primary/20'
+                          }`}
                       >
                         <PlusIcon className="w-5 h-5" />
                       </button>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className={`text-sm px-2 py-1 rounded ${item.is_available
+                      <span className={`text-sm px-2 py-1 rounded ${item.effective_is_available === false
+                        ? 'bg-red-100 text-red-800'
+                        : item.is_available
                         ? 'bg-green-100 text-green-800'
                         : 'bg-red-100 text-red-800'
                         }`}>
-                        {item.is_available ? 'Tersedia' : 'Habis'}
+                        {item.effective_is_available === false ? 'Habis' : item.is_available ? 'Tersedia' : 'Habis'}
                       </span>
                       {cart.find(cartItem => cartItem.id === item.id) && (
                         <span className="text-sm text-gray-600">
@@ -399,13 +529,13 @@ export default function OrderModal({
           </div>
 
           {/* Right Panel - Cart */}
-          <div className="w-1/3 flex flex-col">
-            <div className="p-6 border-b">
+          <div className="w-full lg:w-1/3 flex flex-col min-h-[280px]">
+            <div className="p-4 sm:p-6 border-b">
               <h3 className="text-lg font-semibold text-gray-900">Keranjang</h3>
               <p className="text-sm text-gray-600">{cart.length} item</p>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
               {cart.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <div className="text-4xl mb-4">🛒</div>
@@ -458,7 +588,7 @@ export default function OrderModal({
             </div>
 
             {/* Cart Summary */}
-            <div className="border-t p-6 bg-gray-50">
+            <div className="border-t p-4 sm:p-6 bg-gray-50">
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Subtotal</span>
@@ -513,7 +643,7 @@ export default function OrderModal({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

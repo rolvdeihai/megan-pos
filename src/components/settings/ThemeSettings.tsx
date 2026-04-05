@@ -5,11 +5,14 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { getOwnerId } from '@/lib/user-scope';
 import { toast } from 'react-hot-toast';
+import { AnimatePresence, motion } from 'framer-motion';
+import { CheckIcon } from '@heroicons/react/24/outline';
 
 export default function ThemeSettings() {
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [saveState, setSaveState] = useState<'idle' | 'loading' | 'success'>('idle');
     const [settings, setSettings] = useState({
         primary_color: '#3B82F6', // Default Blue
         secondary_color: '#10B981', // Default Green
@@ -67,6 +70,7 @@ export default function ThemeSettings() {
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true);
+        setSaveState('loading');
 
         try {
             if (!ownerId) {
@@ -114,9 +118,12 @@ export default function ThemeSettings() {
             root.style.setProperty('--secondary', settings.secondary_color);
 
             toast.success('Tema berhasil disimpan');
+            setSaveState('success');
+            setTimeout(() => setSaveState('idle'), 1200);
         } catch (error) {
             console.error('Error saving theme:', error);
             toast.error('Gagal menyimpan tema');
+            setSaveState('idle');
         } finally {
             setSaving(false);
         }
@@ -162,12 +169,19 @@ export default function ThemeSettings() {
                                 onChange={(e) => setSettings({ ...settings, primary_color: e.target.value })}
                                 className="h-10 w-20 p-1 border rounded"
                             />
-                            <input
-                                type="text"
-                                value={settings.primary_color}
-                                onChange={(e) => setSettings({ ...settings, primary_color: normalizeHex(e.target.value) || e.target.value })}
-                                className="flex-1 px-3 py-2 border rounded-lg focus:ring-primary/30 focus:border-primary"
-                            />
+                            <div className="relative flex-1 pt-2">
+                                <input
+                                    type="text"
+                                    value={settings.primary_color}
+                                    onChange={(e) => setSettings({ ...settings, primary_color: normalizeHex(e.target.value) || e.target.value })}
+                                    placeholder=" "
+                                    className="peer w-full px-3 pt-5 pb-2.5 border rounded-lg transition-all duration-200 focus:ring-4 focus:ring-primary/15 focus:border-primary"
+                                />
+                                {/* Edit floating label text/position here. */}
+                                <label className="absolute left-3 top-5 text-sm text-gray-500 transition-all duration-200 pointer-events-none peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-primary peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-xs">
+                                    Hex Primary
+                                </label>
+                            </div>
                         </div>
                         <p className="mt-1 text-xs text-gray-500">Digunakan untuk tombol utama, header, dan aksen penting.</p>
                     </div>
@@ -183,37 +197,82 @@ export default function ThemeSettings() {
                                 onChange={(e) => setSettings({ ...settings, secondary_color: e.target.value })}
                                 className="h-10 w-20 p-1 border rounded"
                             />
-                            <input
-                                type="text"
-                                value={settings.secondary_color}
-                                onChange={(e) => setSettings({ ...settings, secondary_color: normalizeHex(e.target.value) || e.target.value })}
-                                className="flex-1 px-3 py-2 border rounded-lg focus:ring-primary/30 focus:border-primary"
-                            />
+                            <div className="relative flex-1 pt-2">
+                                <input
+                                    type="text"
+                                    value={settings.secondary_color}
+                                    onChange={(e) => setSettings({ ...settings, secondary_color: normalizeHex(e.target.value) || e.target.value })}
+                                    placeholder=" "
+                                    className="peer w-full px-3 pt-5 pb-2.5 border rounded-lg transition-all duration-200 focus:ring-4 focus:ring-primary/15 focus:border-primary"
+                                />
+                                <label className="absolute left-3 top-5 text-sm text-gray-500 transition-all duration-200 pointer-events-none peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-primary peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-xs">
+                                    Hex Secondary
+                                </label>
+                            </div>
                         </div>
                         <p className="mt-1 text-xs text-gray-500">Digunakan untuk tombol sekunder, badge, dan variasi.</p>
                     </div>
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Logo URL</label>
-                    <input
-                        type="text"
-                        value={settings.logo_url}
-                        onChange={(e) => setSettings({ ...settings, logo_url: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-primary/30 focus:border-primary"
-                        placeholder="https://example.com/logo.png"
-                    />
+                    <div className="relative pt-2">
+                        <input
+                            type="text"
+                            value={settings.logo_url}
+                            onChange={(e) => setSettings({ ...settings, logo_url: e.target.value })}
+                            className="peer w-full px-3 pt-5 pb-2.5 border rounded-lg transition-all duration-200 focus:ring-4 focus:ring-primary/15 focus:border-primary"
+                            placeholder=" "
+                        />
+                        <label className="absolute left-3 top-5 text-sm text-gray-500 transition-all duration-200 pointer-events-none peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-primary peer-[:not(:placeholder-shown)]:top-1.5 peer-[:not(:placeholder-shown)]:text-xs">
+                            Logo URL
+                        </label>
+                    </div>
                 </div>
 
                 <div className="flex justify-end pt-4">
-                    <button
+                    <motion.button
                         type="submit"
                         disabled={saving}
-                        className="px-6 py-2 text-white rounded-lg font-medium disabled:opacity-50"
+                        // Customize save button animation states here.
+                        className="min-w-[180px] px-6 py-2 text-white rounded-lg font-medium disabled:opacity-50 flex items-center justify-center"
                         style={{ backgroundColor: settings.primary_color }}
                     >
-                        {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
-                    </button>
+                        <AnimatePresence mode="wait" initial={false}>
+                            {saveState === 'loading' ? (
+                                <motion.span
+                                    key="saving"
+                                    initial={{ opacity: 0, y: 4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -4 }}
+                                    className="flex items-center"
+                                >
+                                    <span className="mr-2 h-4 w-4 rounded-full border-2 border-white/80 border-t-transparent animate-spin" />
+                                    Menyimpan...
+                                </motion.span>
+                            ) : saveState === 'success' ? (
+                                <motion.span
+                                    key="success"
+                                    initial={{ opacity: 0, scale: 0.7 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.85 }}
+                                    transition={{ type: 'spring', stiffness: 320, damping: 20 }}
+                                    className="flex items-center"
+                                >
+                                    <CheckIcon className="w-5 h-5 mr-2" />
+                                    Berhasil
+                                </motion.span>
+                            ) : (
+                                <motion.span
+                                    key="idle"
+                                    initial={{ opacity: 0, y: 4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -4 }}
+                                >
+                                    Simpan Perubahan
+                                </motion.span>
+                            )}
+                        </AnimatePresence>
+                    </motion.button>
                 </div>
             </form>
         </div>
