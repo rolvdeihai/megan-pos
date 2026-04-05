@@ -23,10 +23,18 @@ Buat file `.env.local` di root:
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 
-# Optional (billing/checkout/payment)
-XENDIT_MODE=simulate
+# Payment Gateway: 'simulate' (default), 'xendit', 'midtrans'
+PAYMENT_GATEWAY=simulate
+
+# Xendit Configuration (when PAYMENT_GATEWAY=xendit)
 XENDIT_API_KEY=xnd_development_dummy
 XENDIT_WEBHOOK_SECRET=whsec_dummy
+
+# Midtrans Configuration (when PAYMENT_GATEWAY=midtrans)
+MIDTRANS_SERVER_KEY=SB-Mid-server-dummy
+MIDTRANS_CLIENT_KEY=SB-Mid-client-dummy
+MIDTRANS_IS_PRODUCTION=false
+
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
 ```
 

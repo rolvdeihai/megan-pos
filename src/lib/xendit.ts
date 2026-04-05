@@ -34,8 +34,15 @@ function getXenditClient(): any {
 
 /**
  * Check if running in simulation mode (development/testing)
+ * Uses PAYMENT_GATEWAY env var if set, falls back to XENDIT_MODE for backwards compatibility
  */
 export function isSimulationMode(): boolean {
+  const paymentGateway = process.env.PAYMENT_GATEWAY;
+  // If PAYMENT_GATEWAY is set, use it
+  if (paymentGateway) {
+    return paymentGateway === 'simulate';
+  }
+  // Fallback to legacy XENDIT_MODE for backwards compatibility
   return XENDIT_MODE === 'simulate';
 }
 

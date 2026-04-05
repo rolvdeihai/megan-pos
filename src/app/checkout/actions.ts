@@ -1,10 +1,13 @@
 'use server';
 
-// Xendit SDK Checkout Actions
-// Uses official xendit-node SDK for standardized payment processing
+// Payment Gateway Checkout Actions
+// Supports multiple payment gateways: simulate, xendit, midtrans
 
-import { createXenditInvoice, isSimulationMode } from '@/lib/xendit';
-import type { Invoice } from '@/lib/xendit';
+import {
+  createInvoice,
+  isSimulationMode,
+  getPaymentGateway,
+} from '@/lib/payment-gateway';
 import {
   validateSubscriptionChange,
   createPendingSubscription,
@@ -63,16 +66,18 @@ export async function initiateCheckout(params: CheckoutParams): Promise<Checkout
       };
     }
 
-    // Create Xendit invoice with SDK
-    // Docs: https://developers.xendit.co/api-reference/#create-invoice
-    const invoice: Invoice = await createXenditInvoice({
+    // Create payment invoice via abstraction layer
+    const gateway = getPaymentGateway();
+    const webhookPath = gateway === 'midtrans' ? '/api/webhooks/midtrans' : '/api/webhooks/xendit';
+
+    const invoice = await createInvoice({
       external_id: subscription.id,
       amount: validation.targetPackage.price,
       description: `Berlangganan ${validation.targetPackage.name} - Megan POS`,
       payment_methods: [paymentMethod],
       success_redirect_url: `${BASE_URL}/dashboard/billing?status=success&order_id=${subscription.id}`,
       failure_redirect_url: `${BASE_URL}/dashboard/billing?status=failed&order_id=${subscription.id}`,
-      callback_url: `${BASE_URL}/api/webhooks/xendit`,
+      callback_url: `${BASE_URL}${webhookPath}`,
       currency: 'IDR',
       invoice_duration: 86400, // 24 hours
       customer: {

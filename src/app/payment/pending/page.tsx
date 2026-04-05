@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { isSimulationMode } from '@/lib/xendit';
+import { isSimulationMode, getPaymentGateway } from '@/lib/payment-gateway';
 import { simulatePaymentSuccess, simulatePaymentFailure } from '@/app/dashboard/billing/actions';
 import toast from 'react-hot-toast';
 
