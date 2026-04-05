@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { AnimatePresence, motion } from 'framer-motion';
 
 type Employee = {
   id: string;
@@ -43,6 +44,7 @@ export default function EmployeesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [useCustomRole, setUseCustomRole] = useState(false);
+  const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -484,68 +486,104 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kode</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PIN</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {employees.map((employee) => (
-              <tr key={employee.id}>
-                <td className="px-6 py-4 whitespace-nowrap font-mono text-sm">{employee.employee_code}</td>
-                <td className="px-6 py-4">
-                  <div className="text-sm font-medium text-gray-900">{employee.full_name}</div>
-                  <div className="text-sm text-gray-500">{employee.email}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">
-                    {employee.pin_code || 'N/A'}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${employee.role_id ? 'bg-purple-100 text-purple-800' : 'bg-primary/10 text-primary'}`}>
-                    {getRoleLabel(employee)}
-                    {employee.role_id && ' (Custom)'}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${employee.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        {employees.map((employee, index) => {
+          const initials = employee.full_name
+            .split(' ')
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((n) => n[0]?.toUpperCase())
+            .join('');
+          const expanded = expandedEmployeeId === employee.id;
+
+          return (
+            <motion.div
+              key={employee.id}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, delay: index * 0.04 }}
+              // Adjust hover tilt/scale style here.
+              whileHover={{ scale: 1.02, rotateX: 1, rotateY: -1 }}
+              className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/85 backdrop-blur-sm p-5 shadow-sm hover:shadow-[0_16px_45px_-20px_rgba(37,99,235,0.55)]"
+              style={{ transformStyle: 'preserve-3d' }}
+            >
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/45 via-transparent to-primary/10" />
+              <div className="relative">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary to-blue-500 text-white flex items-center justify-center font-semibold shadow-md">
+                      {/* Replace with your avatar placeholder image if needed. */}
+                      {initials || 'EM'}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-slate-900">{employee.full_name}</h3>
+                      <p className="text-xs text-slate-500 font-mono">{employee.employee_code}</p>
+                    </div>
+                  </div>
+                  <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${employee.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}>
                     {employee.is_active ? 'Aktif' : 'Nonaktif'}
                   </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${employee.role_id ? 'bg-purple-100 text-purple-800' : 'bg-primary/10 text-primary'}`}>
+                    {getRoleLabel(employee)}{employee.role_id && ' (Custom)'}
+                  </span>
+                  <span className="px-2.5 py-1 text-xs rounded-full bg-slate-100 text-slate-600 font-mono">
+                    PIN: {employee.pin_code || 'N/A'}
+                  </span>
+                </div>
+
+                <div className="mt-4 flex items-center gap-2">
+                  <button
+                    onClick={() => setExpandedEmployeeId(expanded ? null : employee.id)}
+                    className="px-3 py-2 text-xs font-medium bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200"
+                  >
+                    {expanded ? 'Sembunyikan Detail' : 'Lihat Detail'}
+                  </button>
                   <button
                     onClick={() => toggleEmployeeStatus(employee.id, employee.is_active)}
-                    className={`${employee.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'
-                      }`}
+                    className={`px-3 py-2 text-xs font-medium rounded-lg ${employee.is_active ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
                   >
                     {employee.is_active ? 'Nonaktifkan' : 'Aktifkan'}
                   </button>
                   <button
                     onClick={() => handleEdit(employee)}
-                    className="text-primary hover:text-primary underline"
+                    className="px-3 py-2 text-xs font-medium bg-primary/10 text-primary rounded-lg hover:bg-primary/20"
                   >
                     Edit
                   </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {employees.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            Belum ada karyawan. Klik "+ Tambah Karyawan" untuk memulai.
-          </div>
-        )}
+                </div>
+
+                <AnimatePresence initial={false}>
+                  {expanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.28, ease: 'easeOut' }}
+                      className="overflow-hidden"
+                    >
+                      <div className="mt-4 border-t pt-4 text-sm text-slate-600 space-y-1">
+                        <p>Email: {employee.email || '-'}</p>
+                        <p>Telepon: {employee.phone || '-'}</p>
+                        <p>Gaji Bulanan: {employee.monthly_salary ? `Rp ${employee.monthly_salary.toLocaleString('id-ID')}` : '-'}</p>
+                        <p>Rate Harian: {employee.daily_rate ? `Rp ${employee.daily_rate.toLocaleString('id-ID')}` : '-'}</p>
+                        <p>Bergabung: {new Date(employee.created_at).toLocaleDateString('id-ID')}</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
+      {employees.length === 0 && (
+        <div className="text-center py-8 text-gray-500">
+          Belum ada karyawan. Klik "+ Tambah Karyawan" untuk memulai.
+        </div>
+      )}
     </div>
   );
 }

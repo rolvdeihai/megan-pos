@@ -9,11 +9,13 @@ import OrderModal from '@/components/orders/OrderModal';
 import { useAuth } from '@/components/auth/AuthProvider'; // Tambahkan ini
 import { getOwnerId } from '@/lib/user-scope';
 import { sendOrderEmail } from '@/lib/email-service';
-import { checkTableConflict } from '@/lib/table-availability';
+import { checkTableConflict, type TableOrderStatus } from '@/lib/table-availability';
+import { applyIngredientAvailability } from '@/lib/menu-availability';
 
 export default function NewOrderPage() {
   const router = useRouter();
   const [tables, setTables] = useState<any[]>([]);
+  const [activeTableOrders, setActiveTableOrders] = useState<TableOrderStatus[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
@@ -38,10 +40,18 @@ export default function NewOrderPage() {
       .from('restaurant_tables')
       .select('*')
       .eq('user_id', ownerId)
-      .eq('is_available', true)
       .order('table_number');
 
     setTables(tablesData || []);
+
+    const { data: activeOrdersData } = await supabase
+      .from('orders')
+      .select('table_id, status, scheduled_time, created_at')
+      .eq('user_id', ownerId)
+      .not('status', 'in', '("completed","cancelled")')
+      .not('table_id', 'is', null);
+
+    setActiveTableOrders(activeOrdersData || []);
 
     // Fetch menu items
     const { data: menuData } = await supabase
@@ -51,7 +61,19 @@ export default function NewOrderPage() {
       .eq('is_available', true)
       .order('name');
 
-    setMenuItems(menuData || []);
+    const menuIds = (menuData || []).map((item) => item.id);
+    let recipeData: any[] = [];
+
+    if (menuIds.length > 0) {
+      const { data } = await supabase
+        .from('menu_item_ingredients')
+        .select('menu_item_id, quantity, inventory(name, current_stock)')
+        .in('menu_item_id', menuIds);
+
+      recipeData = data || [];
+    }
+
+    setMenuItems(applyIngredientAvailability(menuData || [], recipeData));
 
     // Fetch menu categories
     const { data: catData } = await supabase
@@ -189,7 +211,7 @@ export default function NewOrderPage() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto py-8">
+      <div className="py-4 sm:py-6">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Memuat data...</p>
@@ -199,14 +221,15 @@ export default function NewOrderPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Buat Order Baru</h1>
-        <p className="mt-2 text-gray-600">Buat order untuk customer</p>
+    <div className="py-4 sm:py-6">
+      <div className="mb-6 sm:mb-8 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Buat Order Baru</h1>
+        <p className="mt-2 text-sm sm:text-base text-gray-600">Buat order untuk customer</p>
       </div>
 
       <OrderModal
         tables={tables}
+        activeTableOrders={activeTableOrders}
         menuItems={menuItems}
         categories={categories}
         settings={settings}

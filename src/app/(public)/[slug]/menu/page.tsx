@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { notFound } from 'next/navigation';
 import MenuItemCard from '@/components/menu/MenuItemCard';
 import RestaurantHeader from '@/components/menu/RestaurantHeader';
+import { applyIngredientAvailability } from '@/lib/menu-availability';
 
 interface Props {
   params: {
@@ -73,17 +74,31 @@ export default async function PublicMenuPage({ params }: Props) {
     .eq('is_available', true)
     .order('name');
 
+  const menuIds = (menuItems || []).map((item) => item.id);
+  let recipeRows: any[] = [];
+
+  if (menuIds.length > 0) {
+    const { data } = await supabase
+      .from('menu_item_ingredients')
+      .select('menu_item_id, quantity, inventory(name, current_stock)')
+      .in('menu_item_id', menuIds);
+
+    recipeRows = data || [];
+  }
+
+  const resolvedMenuItems = applyIngredientAvailability(menuItems || [], recipeRows);
+
   // Group items by category
   const itemsByCategory: Record<string, any[]> = {};
   
   categories?.forEach(category => {
-    itemsByCategory[category.id] = menuItems?.filter(item => 
+    itemsByCategory[category.id] = resolvedMenuItems.filter(item =>
       item.category_id === category.id
     ) || [];
   });
 
   // Get uncategorized items
-  const uncategorizedItems = menuItems?.filter(item => !item.category_id) || [];
+  const uncategorizedItems = resolvedMenuItems.filter(item => !item.category_id) || [];
 
   return (
     <div className="min-h-screen bg-gray-50">

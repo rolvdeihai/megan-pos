@@ -52,6 +52,16 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
   const [paymentMethod, setPaymentMethod] = useState<string>('');
   const [cashReceived, setCashReceived] = useState<number>(0);
   const [changeAmount, setChangeAmount] = useState<number>(0);
+  const formatMoney = (amount: number) => `Rp ${amount.toLocaleString('id-ID')}`;
+  const formatOrderType = (orderType: string) => orderType.replace('_', ' ');
+  const formatInvoiceDate = (value: string) => new Date(value).toLocaleString('id-ID', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
   useEffect(() => {
     fetchOrderDetails();
@@ -106,38 +116,333 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
     if (printContent) {
       const printWindow = window.open('', '_blank');
       if (printWindow) {
+        const restaurantName = user?.restaurant_name || 'Restoran Megan POS';
+        const createdAt = orderDetails?.created_at ? formatInvoiceDate(orderDetails.created_at) : '-';
+        const itemRows = (orderDetails?.items || []).map((item) => `
+          <tr>
+            <td class="item-cell">
+              <div class="item-name">${item.name}</div>
+              ${item.special_instructions ? `<div class="item-note">Catatan: ${item.special_instructions}</div>` : ''}
+            </td>
+            <td class="qty-cell">${item.quantity}</td>
+            <td class="price-cell">${formatMoney(item.unit_price)}</td>
+            <td class="price-cell total-cell">${formatMoney(item.total_price)}</td>
+          </tr>
+        `).join('');
+        const summaryRows = [
+          `<div class="summary-row"><span>Subtotal</span><span>${formatMoney(orderDetails?.subtotal || 0)}</span></div>`,
+          (orderDetails?.discount_amount || 0) > 0
+            ? `<div class="summary-row discount"><span>Diskon (${orderDetails?.discount_percentage || 0}%)</span><span>- ${formatMoney(orderDetails?.discount_amount || 0)}</span></div>`
+            : '',
+          `<div class="summary-row"><span>Pajak (${orderDetails?.tax_percentage || 0}%)</span><span>${formatMoney(orderDetails?.tax_amount || 0)}</span></div>`,
+          (orderDetails?.service_charge_amount || 0) > 0
+            ? `<div class="summary-row"><span>Service Charge (${orderDetails?.service_charge_percentage || 0}%)</span><span>${formatMoney(orderDetails?.service_charge_amount || 0)}</span></div>`
+            : '',
+          (orderDetails?.delivery_fee || 0) > 0
+            ? `<div class="summary-row"><span>Biaya Pengiriman</span><span>${formatMoney(orderDetails?.delivery_fee || 0)}</span></div>`
+            : '',
+        ].filter(Boolean).join('');
+
         printWindow.document.write(`
           <html>
             <head>
               <title>Invoice ${orderDetails?.order_number}</title>
               <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .invoice-header { text-align: center; margin-bottom: 30px; }
-                .invoice-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
-                .invoice-details { margin-bottom: 20px; }
-                .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                .invoice-table th, .invoice-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                .invoice-table th { background-color: #f5f5f5; }
-                .totals { margin-left: auto; width: 300px; }
-                .totals-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
-                .total-amount { font-size: 18px; font-weight: bold; border-top: 2px solid #000; padding-top: 10px; }
-                .footer { margin-top: 40px; text-align: center; color: #666; }
+                * { box-sizing: border-box; }
+                body {
+                  margin: 0;
+                  font-family: Arial, sans-serif;
+                  background: #f8fafc;
+                  color: #0f172a;
+                }
+                .page {
+                  padding: 32px 20px;
+                }
+                .shell {
+                  max-width: 920px;
+                  margin: 0 auto;
+                }
+                .card {
+                  background: #ffffff;
+                  border: 1px solid #e5e7eb;
+                  border-radius: 24px;
+                  overflow: hidden;
+                  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+                }
+                .header {
+                  display: flex;
+                  justify-content: space-between;
+                  gap: 24px;
+                  padding: 24px;
+                  border-bottom: 1px solid #e5e7eb;
+                  background: #f8fafc;
+                }
+                .eyebrow {
+                  display: inline-block;
+                  margin-bottom: 8px;
+                  padding: 6px 12px;
+                  border-radius: 999px;
+                  background: rgba(37, 99, 235, 0.1);
+                  color: #2563eb;
+                  font-size: 12px;
+                  font-weight: 700;
+                }
+                .title {
+                  margin: 0;
+                  font-size: 30px;
+                  line-height: 1.2;
+                }
+                .subtitle {
+                  margin: 6px 0 0;
+                  color: #64748b;
+                  font-size: 14px;
+                }
+                .meta {
+                  display: flex;
+                  flex-wrap: wrap;
+                  gap: 10px;
+                  align-content: flex-start;
+                }
+                .meta-chip {
+                  padding: 8px 12px;
+                  border-radius: 999px;
+                  background: #ffffff;
+                  border: 1px solid #dbe2ea;
+                  color: #334155;
+                  font-size: 12px;
+                  font-weight: 700;
+                }
+                .content {
+                  padding: 24px;
+                }
+                .info-grid {
+                  display: grid;
+                  grid-template-columns: repeat(2, minmax(0, 1fr));
+                  gap: 16px;
+                  margin-bottom: 24px;
+                }
+                .info-card {
+                  border: 1px solid #e5e7eb;
+                  border-radius: 18px;
+                  padding: 18px;
+                  background: #ffffff;
+                }
+                .info-title {
+                  margin: 0 0 14px;
+                  font-size: 12px;
+                  font-weight: 800;
+                  letter-spacing: 0.08em;
+                  text-transform: uppercase;
+                  color: #64748b;
+                }
+                .info-list {
+                  display: grid;
+                  gap: 10px;
+                }
+                .info-row {
+                  display: flex;
+                  justify-content: space-between;
+                  gap: 16px;
+                  font-size: 14px;
+                }
+                .info-label {
+                  color: #64748b;
+                }
+                .info-value {
+                  font-weight: 600;
+                  text-align: right;
+                }
+                .section-title {
+                  margin: 0 0 12px;
+                  font-size: 18px;
+                }
+                .table-wrap {
+                  border: 1px solid #e5e7eb;
+                  border-radius: 18px;
+                  overflow: hidden;
+                }
+                table {
+                  width: 100%;
+                  border-collapse: collapse;
+                }
+                thead {
+                  background: #f8fafc;
+                }
+                th {
+                  padding: 14px 18px;
+                  font-size: 12px;
+                  text-transform: uppercase;
+                  letter-spacing: 0.05em;
+                  color: #64748b;
+                  text-align: left;
+                }
+                td {
+                  padding: 16px 18px;
+                  border-top: 1px solid #edf2f7;
+                  vertical-align: top;
+                  font-size: 14px;
+                }
+                .qty-cell, .price-cell {
+                  text-align: right;
+                  white-space: nowrap;
+                }
+                .item-name {
+                  font-weight: 700;
+                  color: #111827;
+                }
+                .item-note {
+                  margin-top: 6px;
+                  font-size: 12px;
+                  color: #6b7280;
+                }
+                .summary {
+                  width: min(100%, 360px);
+                  margin: 24px 0 0 auto;
+                  padding: 18px 20px;
+                  border: 1px solid #e5e7eb;
+                  border-radius: 18px;
+                  background: #ffffff;
+                }
+                .summary-row {
+                  display: flex;
+                  justify-content: space-between;
+                  gap: 12px;
+                  margin-bottom: 10px;
+                  font-size: 14px;
+                }
+                .summary-row span:first-child {
+                  color: #64748b;
+                }
+                .discount span {
+                  color: #dc2626 !important;
+                }
+                .summary-total {
+                  display: flex;
+                  justify-content: space-between;
+                  gap: 12px;
+                  margin-top: 14px;
+                  padding-top: 14px;
+                  border-top: 1px solid #e5e7eb;
+                  font-size: 18px;
+                  font-weight: 800;
+                }
+                .notes {
+                  margin-top: 24px;
+                  padding: 18px;
+                  border-radius: 18px;
+                  background: #f8fafc;
+                  border: 1px solid #e5e7eb;
+                  font-size: 14px;
+                  color: #334155;
+                }
+                .notes strong {
+                  color: #0f172a;
+                }
+                .footer {
+                  margin-top: 24px;
+                  text-align: center;
+                  color: #64748b;
+                  font-size: 13px;
+                }
                 @media print {
-                  body { margin: 0; }
-                  .no-print { display: none; }
+                  body { background: #ffffff; }
+                  .page { padding: 0; }
+                  .card {
+                    box-shadow: none;
+                    border: 0;
+                    border-radius: 0;
+                  }
+                  .header, .info-card, .summary, .notes, .table-wrap {
+                    break-inside: avoid;
+                  }
+                }
+                @media (max-width: 640px) {
+                  .header, .info-grid {
+                    grid-template-columns: 1fr;
+                    display: grid;
+                  }
                 }
               </style>
             </head>
             <body>
-              ${printContent.innerHTML}
+              <div class="page">
+                <div class="shell">
+                  <div class="card">
+                    <div class="header">
+                      <div>
+                        <div class="eyebrow">Invoice Pesanan</div>
+                        <h1 class="title">Invoice ${orderDetails?.order_number || ''}</h1>
+                        <p class="subtitle">${restaurantName}</p>
+                        <p class="subtitle">${createdAt}</p>
+                      </div>
+                      <div class="meta">
+                        <span class="meta-chip">${formatOrderType(orderDetails?.order_type || '-')}</span>
+                        ${orderDetails?.table_number ? `<span class="meta-chip">Meja ${orderDetails.table_number}</span>` : ''}
+                      </div>
+                    </div>
+
+                    <div class="content">
+                      <div class="info-grid">
+                        <div class="info-card">
+                          <h2 class="info-title">Informasi Order</h2>
+                          <div class="info-list">
+                            <div class="info-row"><span class="info-label">No. Order</span><span class="info-value">${orderDetails?.order_number || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">Tipe</span><span class="info-value">${formatOrderType(orderDetails?.order_type || '-')}</span></div>
+                            ${orderDetails?.table_number ? `<div class="info-row"><span class="info-label">Meja</span><span class="info-value">${orderDetails.table_number}</span></div>` : ''}
+                          </div>
+                        </div>
+                        <div class="info-card">
+                          <h2 class="info-title">Informasi Pelanggan</h2>
+                          <div class="info-list">
+                            <div class="info-row"><span class="info-label">Nama</span><span class="info-value">${orderDetails?.customer_name || '-'}</span></div>
+                            <div class="info-row"><span class="info-label">Telepon</span><span class="info-value">${orderDetails?.customer_phone || '-'}</span></div>
+                            ${orderDetails?.delivery_address ? `<div class="info-row"><span class="info-label">Alamat</span><span class="info-value">${orderDetails.delivery_address}</span></div>` : ''}
+                          </div>
+                        </div>
+                      </div>
+
+                      <h2 class="section-title">Item Pesanan</h2>
+                      <div class="table-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Item</th>
+                              <th class="qty-cell">Qty</th>
+                              <th class="price-cell">Harga</th>
+                              <th class="price-cell">Subtotal</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${itemRows}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div class="summary">
+                        ${summaryRows}
+                        <div class="summary-total">
+                          <span>Total</span>
+                          <span>${formatMoney(orderDetails?.total_amount || 0)}</span>
+                        </div>
+                      </div>
+
+                      ${orderDetails?.notes ? `<div class="notes"><strong>Catatan:</strong> ${orderDetails.notes}</div>` : ''}
+                    </div>
+                  </div>
+
+                  <div class="footer">
+                    <p>Terima kasih telah berbelanja di ${restaurantName}.</p>
+                  </div>
+                </div>
+              </div>
               <div class="footer">
-                <p>Terima kasih telah berbelanja di restoran kami!</p>
                 <p>${new Date().toLocaleString('id-ID')}</p>
               </div>
             </body>
           </html>
         `);
         printWindow.document.close();
+        printWindow.focus();
         printWindow.print();
       }
     }
@@ -166,7 +471,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
 
         const { data: invItem, error: invError } = await supabase
           .from('inventory')
-          .select('id, name, current_stock, cost_per_unit, transactions_connected, expense_payment_method')
+          .select('id, name, current_stock')
           .eq('id', recipe.inventory_id)
           .single();
 
@@ -184,40 +489,8 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
             .eq('id', recipe.inventory_id);
         }
 
-        // 2. Create expense transaction if connected and not already exists
-        if (invItem.transactions_connected) {
-          // Check if expense already recorded for this order + inventory
-          const { data: existingExpense } = await supabase
-            .from('transactions')
-            .select('id')
-            .eq('order_id', orderDetails.id)
-            .eq('inventory_id', invItem.id)
-            .eq('type', 'expense')
-            .maybeSingle();
-
-          if (existingExpense) {
-            console.log('Expense already exists for', invItem.name);
-            continue;
-          }
-
-          const expenseAmount = invItem.cost_per_unit * totalDeduction;
-          const expenseTrxNumber = `EXP-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-
-          await supabase
-            .from('transactions')
-            .insert({
-              user_id: orderDetails.user_id,
-              order_id: orderDetails.id,
-              inventory_id: invItem.id,
-              transaction_number: expenseTrxNumber,
-              type: 'expense',
-              amount: expenseAmount,
-              payment_method: invItem.expense_payment_method || paymentMethod,
-              status: 'completed',
-              notes: `Penggunaan inventory "${invItem.name}" untuk order ${orderDetails.order_number}`,
-              created_at: new Date().toISOString(),
-            });
-        }
+        // Gramasi order hanya mengurangi stok inventory.
+        // Jangan catat ke transactions agar tidak dobel dengan expense pembelian/restock inventory.
       }
     }
 

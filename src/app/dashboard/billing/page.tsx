@@ -9,6 +9,7 @@ import { useAuth } from '@/components/auth/AuthProvider'; // Import useAuth
 import { isSimulationMode, getPaymentGateway } from '@/lib/payment-gateway';
 import { simulatePaymentSuccess, simulatePaymentFailure } from './actions';
 import toast from 'react-hot-toast';
+import { AnimatePresence, motion } from 'framer-motion';
 
 const packages = [
   {
@@ -54,6 +55,7 @@ export default function BillingPage() {
   const [currentSubscription, setCurrentSubscription] = useState<any>(null);
   const [showSimulation, setShowSimulation] = useState(false);
   const [simSubscriptionId, setSimSubscriptionId] = useState<string | null>(null);
+  const [showSuccessAnim, setShowSuccessAnim] = useState(false);
 
   const router = useRouter();
   // Gunakan useAuth hook
@@ -73,6 +75,8 @@ export default function BillingPage() {
 
     if (status === 'success') {
       toast.success('Pembayaran berhasil! Paket Anda telah diaktifkan.');
+      setShowSuccessAnim(true);
+      setTimeout(() => setShowSuccessAnim(false), 1400);
       fetchCurrentSubscription();
       // Clear query params
       window.history.replaceState({}, '', window.location.pathname);
@@ -113,6 +117,8 @@ export default function BillingPage() {
 
     if (result.success) {
       toast.success('Simulasi: Pembayaran berhasil!');
+      setShowSuccessAnim(true);
+      setTimeout(() => setShowSuccessAnim(false), 1400);
       setShowSimulation(false);
       setSimSubscriptionId(null);
       await fetchCurrentSubscription();
@@ -179,6 +185,35 @@ export default function BillingPage() {
 
   return (
     <div className="max-w-7xl mx-auto py-8">
+      <AnimatePresence>
+        {showSuccessAnim && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[70] flex items-center justify-center pointer-events-none"
+          >
+            {/* Customize success burst colors/size here. */}
+            <motion.div
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 1.1, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              className="h-24 w-24 rounded-full bg-emerald-500/90 flex items-center justify-center shadow-2xl"
+            >
+              <svg viewBox="0 0 24 24" className="w-12 h-12 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <motion.path
+                  d="M5 13l4 4L19 7"
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ duration: 0.45, ease: 'easeOut' }}
+                />
+              </svg>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="text-center mb-12">
         <h1 className="text-3xl font-bold text-gray-900">Pilih Paket Langganan</h1>
         <p className="mt-4 text-gray-600">
@@ -204,12 +239,24 @@ export default function BillingPage() {
           const isCurrentPlan = currentSubscription?.package_id === pkg.id;
           
           return (
+            <div key={pkg.id} className="relative">
+              {isCurrentPlan && (
+                <motion.div
+                  className="absolute -inset-[1.5px] rounded-lg"
+                  style={{
+                    background: 'linear-gradient(120deg, rgba(56,189,248,0.8), rgba(16,185,129,0.8), rgba(99,102,241,0.8), rgba(56,189,248,0.8))',
+                    backgroundSize: '220% 220%',
+                  }}
+                  // Adjust active tier shimmer speed/colors here.
+                  animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+                  transition={{ duration: 4.2, repeat: Infinity, ease: 'linear' }}
+                />
+              )}
             <div
-              key={pkg.id}
-              className={`rounded-lg border-2 p-6 transition-all ${
+              className={`relative rounded-lg border-2 p-6 transition-all ${
                 selectedPackage === pkg.id
                   ? 'border-primary bg-primary/10 shadow-lg scale-105'
-                  : 'border-gray-200 hover:border-gray-300'
+                  : 'border-gray-200 hover:border-gray-300 bg-white'
               }`}
             >
               {isCurrentPlan && (
@@ -250,6 +297,7 @@ export default function BillingPage() {
               >
                 {isCurrentPlan ? 'Paket Saat Ini' : (selectedPackage === pkg.id ? 'Dipilih' : 'Pilih Paket')}
               </button>
+            </div>
             </div>
           );
         })}

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { AnimatePresence, motion } from 'framer-motion';
 
 type Employee = {
     id: string;
@@ -30,6 +31,30 @@ type Payroll = {
     };
 };
 
+function CountUpValue({ value, prefix = 'Rp ' }: { value: number; prefix?: string }) {
+    const [display, setDisplay] = useState(0);
+
+    useEffect(() => {
+        const duration = 900;
+        const start = performance.now();
+        const from = 0;
+        const diff = value - from;
+        let raf = 0;
+
+        const step = (now: number) => {
+            const progress = Math.min((now - start) / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            setDisplay(Math.round(from + diff * eased));
+            if (progress < 1) raf = requestAnimationFrame(step);
+        };
+
+        raf = requestAnimationFrame(step);
+        return () => cancelAnimationFrame(raf);
+    }, [value]);
+
+    return <>{prefix}{display.toLocaleString('id-ID')}</>;
+}
+
 export default function PayrollPage() {
     const { user } = useAuth();
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -46,6 +71,7 @@ export default function PayrollPage() {
     const [editingPayroll, setEditingPayroll] = useState<Payroll | null>(null);
     const [editBasicSalary, setEditBasicSalary] = useState<string>('');
     const [editDeductions, setEditDeductions] = useState<string>('');
+    const [showSuccessAnim, setShowSuccessAnim] = useState(false);
 
     useEffect(() => {
         if (user?.id) {
@@ -176,6 +202,8 @@ export default function PayrollPage() {
                 .eq('id', payrollId);
 
             if (error) throw error;
+            setShowSuccessAnim(true);
+            setTimeout(() => setShowSuccessAnim(false), 1300);
             fetchData();
         } catch (error) {
             console.error('Error updating payroll status:', error);
@@ -252,6 +280,29 @@ export default function PayrollPage() {
 
     return (
         <div className="max-w-7xl mx-auto py-8">
+            <AnimatePresence>
+                {showSuccessAnim && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        className="fixed inset-0 z-[70] flex items-center justify-center pointer-events-none"
+                    >
+                        {/* Customize payroll success animation here. */}
+                        <motion.div
+                            initial={{ scale: 0.7, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 1.1, opacity: 0 }}
+                            transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+                            className="h-24 w-24 rounded-full bg-emerald-500/90 flex items-center justify-center shadow-2xl"
+                        >
+                            <svg viewBox="0 0 24 24" className="w-12 h-12 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <motion.path d="M5 13l4 4L19 7" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.4 }} />
+                            </svg>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">Manajemen Penggajian (Payroll)</h1>
@@ -269,6 +320,27 @@ export default function PayrollPage() {
                 >
                     + Buat Slip Gaji Baru
                 </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-white rounded-xl shadow p-5">
+                    <p className="text-sm text-gray-500">Total Payroll</p>
+                    <p className="text-2xl font-bold text-slate-900 mt-1">
+                        <CountUpValue value={payrolls.reduce((sum, p) => sum + p.net_salary, 0)} />
+                    </p>
+                </div>
+                <div className="bg-white rounded-xl shadow p-5">
+                    <p className="text-sm text-gray-500">Total Sudah Dibayar</p>
+                    <p className="text-2xl font-bold text-emerald-600 mt-1">
+                        <CountUpValue value={payrolls.filter((p) => p.status === 'paid').reduce((sum, p) => sum + p.net_salary, 0)} />
+                    </p>
+                </div>
+                <div className="bg-white rounded-xl shadow p-5">
+                    <p className="text-sm text-gray-500">Draft Pending</p>
+                    <p className="text-2xl font-bold text-amber-600 mt-1">
+                        <CountUpValue value={payrolls.filter((p) => p.status === 'draft').reduce((sum, p) => sum + p.net_salary, 0)} />
+                    </p>
+                </div>
             </div>
 
             <div className="bg-white shadow rounded-lg overflow-hidden">

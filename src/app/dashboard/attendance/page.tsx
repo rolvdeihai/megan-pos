@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { AnimatePresence, motion } from 'framer-motion';
 
 type Employee = {
     id: string;
@@ -33,6 +34,7 @@ export default function AttendancePage() {
     // Clock in/out states
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
     const [actionType, setActionType] = useState<'in' | 'out'>('in');
+    const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
     useEffect(() => {
         if (user?.id) {
@@ -203,12 +205,20 @@ export default function AttendancePage() {
                         {employees.length === 0 ? (
                             <p className="text-center text-gray-500 py-4">Belum ada data karyawan aktif.</p>
                         ) : (
-                            employees.map(employee => {
+                            employees.map((employee, index) => {
                                 const active = isClockedIn(employee.id);
                                 const completed = hasCompletedShift(employee.id);
 
                                 return (
-                                    <div key={employee.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                                    <motion.div
+                                        key={employee.id}
+                                        initial={{ opacity: 0, y: 14 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.28, delay: index * 0.04 }}
+                                        // Edit hover card style here.
+                                        whileHover={{ scale: 1.01 }}
+                                        className="flex items-center justify-between p-4 border rounded-xl bg-white/80 backdrop-blur-sm hover:shadow-[0_14px_35px_-20px_rgba(37,99,235,0.45)]"
+                                    >
                                         <div>
                                             <h3 className="font-medium text-gray-900">{employee.full_name}</h3>
                                             <p className="text-sm text-gray-500">{employee.role} • {employee.employee_code}</p>
@@ -234,7 +244,7 @@ export default function AttendancePage() {
                                                 </button>
                                             )}
                                         </div>
-                                    </div>
+                                    </motion.div>
                                 );
                             })
                         )}
@@ -251,33 +261,67 @@ export default function AttendancePage() {
                         </div>
                     ) : (
                         <div className="space-y-4 overflow-y-auto max-h-[600px] pr-2">
-                            {logs.map(log => (
-                                <div key={log.id} className="p-4 border border-gray-100 bg-gray-50 rounded-lg">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <span className="font-medium">{log.employee?.full_name}</span>
-                                        <span className={`px-2 py-1 text-xs rounded-full ${log.status === 'present' ? 'bg-green-100 text-green-800' :
-                                            log.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
-                                                'bg-red-100 text-red-800'
-                                            }`}>
-                                            {log.status}
-                                        </span>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4 text-sm mt-3">
-                                        <div className="bg-white p-2 rounded border">
-                                            <p className="text-gray-500 text-xs mb-1">Clock In</p>
-                                            <p className="font-medium">
-                                                {log.clock_in ? new Date(log.clock_in).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
-                                            </p>
+                            {logs.map((log, index) => {
+                                const expanded = expandedLogId === log.id;
+                                return (
+                                    <motion.div
+                                        key={log.id}
+                                        initial={{ opacity: 0, y: 12 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.24, delay: index * 0.03 }}
+                                        className="p-4 border border-gray-100 bg-gray-50 rounded-lg"
+                                    >
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="font-medium">{log.employee?.full_name}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`px-2 py-1 text-xs rounded-full ${log.status === 'present' ? 'bg-green-100 text-green-800' :
+                                                    log.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
+                                                        'bg-red-100 text-red-800'
+                                                    }`}>
+                                                    {log.status}
+                                                </span>
+                                                <button
+                                                    onClick={() => setExpandedLogId(expanded ? null : log.id)}
+                                                    className="text-xs px-2 py-1 rounded-md bg-white border hover:bg-slate-50"
+                                                >
+                                                    {expanded ? 'Tutup' : 'Detail'}
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="bg-white p-2 rounded border">
-                                            <p className="text-gray-500 text-xs mb-1">Clock Out</p>
-                                            <p className="font-medium">
-                                                {log.clock_out ? new Date(log.clock_out).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
-                                            </p>
+                                        <div className="grid grid-cols-2 gap-4 text-sm mt-3">
+                                            <div className="bg-white p-2 rounded border">
+                                                <p className="text-gray-500 text-xs mb-1">Clock In</p>
+                                                <p className="font-medium">
+                                                    {log.clock_in ? new Date(log.clock_in).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                                </p>
+                                            </div>
+                                            <div className="bg-white p-2 rounded border">
+                                                <p className="text-gray-500 text-xs mb-1">Clock Out</p>
+                                                <p className="font-medium">
+                                                    {log.clock_out ? new Date(log.clock_out).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                                </p>
+                                            </div>
                                         </div>
-                                    </div>
-                                </div>
-                            ))}
+                                        <AnimatePresence initial={false}>
+                                            {expanded && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    transition={{ duration: 0.28, ease: 'easeOut' }}
+                                                    className="overflow-hidden"
+                                                >
+                                                    <div className="mt-3 rounded-lg border bg-white p-3 text-xs text-slate-600 space-y-1">
+                                                        <p>Kode Karyawan: {log.employee?.employee_code}</p>
+                                                        <p>Catatan: {log.notes || '-'}</p>
+                                                        <p>Tanggal: {log.clock_in ? new Date(log.clock_in).toLocaleDateString('id-ID') : '-'}</p>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </motion.div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
