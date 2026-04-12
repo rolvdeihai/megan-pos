@@ -25,6 +25,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useStaff } from '@/contexts/StaffContext';
 import { getVisibleDashboardNavItems } from '@/lib/navigation';
+import { getCurrentSubscription } from '@/app/dashboard/billing/actions';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -71,6 +72,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         ? (currentUser as { user_id?: string }).user_id
         : currentUser.id;
 
+    if (!ownerId) return;
+
     const { data: restaurantData } = await supabase
       .from('users')
       .select('*')
@@ -78,13 +81,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       .single();
     setRestaurant(restaurantData);
 
-    const { data: subscriptionData } = await supabase
-      .from('user_subscriptions')
-      .select('*')
-      .eq('user_id', ownerId)
-      .eq('status', 'active')
-      .maybeSingle();
-    setSubscription(subscriptionData);
+    const subResult = await getCurrentSubscription(ownerId);
+    setSubscription(subResult.data || null);
   };
 
   const handleLogout = async () => {

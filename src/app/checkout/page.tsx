@@ -3,9 +3,8 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { supabase } from '@/lib/supabase';
 import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
-import { initiateCheckout } from './actions';
+import { initiateCheckout, getPackage } from './actions';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 
@@ -28,6 +27,7 @@ function CheckoutContent() {
   const [selectedMethod, setSelectedMethod] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!packageId) {
@@ -38,23 +38,33 @@ function CheckoutContent() {
   }, [packageId]);
 
   const fetchPackage = async () => {
-    const { data, error } = await supabase
-      .from('packages')
-      .select('*')
-      .eq('id', packageId)
-      .single();
+    try {
+      const result = await getPackage(packageId!);
 
-    if (error || !data) {
-      toast.error('Paket tidak ditemukan');
-      router.push('/dashboard/billing');
-      return;
+      if (result.error) {
+        console.error('[Checkout] fetchPackage error:', result.error);
+        setFetchError(result.error);
+        setLoading(false);
+        return;
+      }
+
+      if (!result.data) {
+        console.error('[Checkout] fetchPackage: no data returned');
+        setFetchError('Paket tidak ditemukan');
+        setLoading(false);
+        return;
+      }
+
+      setPkg({
+        ...result.data,
+        features: Array.isArray(result.data.features) ? result.data.features : [],
+      });
+      setLoading(false);
+    } catch (error) {
+      console.error('[Checkout] fetchPackage exception:', error);
+      setFetchError('Gagal memuat data paket');
+      setLoading(false);
     }
-
-    setPkg({
-      ...data,
-      features: Array.isArray(data.features) ? data.features : [],
-    });
-    setLoading(false);
   };
 
   const handlePayment = async () => {
@@ -79,31 +89,19 @@ function CheckoutContent() {
         return;
       }
 
-      if (result.simulation) {
-        if (!result.invoiceId || !result.subscriptionId) {
-          toast.error('Data pembayaran simulasi tidak lengkap. Silakan coba lagi.');
-          return;
-        }
-
-        toast('Mode simulasi aktif. Lanjutkan di halaman pending payment.', { icon: '🧪' });
-
-        const pendingParams = new URLSearchParams({
-          invoice_id: result.invoiceId,
-          subscription_id: result.subscriptionId,
-          method: selectedMethod,
-          simulation: '1',
-        });
-
-        router.push(`/payment/pending?${pendingParams.toString()}`);
+      if (!result.invoiceUrl || !result.subscriptionId) {
+        toast.error('Data pembayaran tidak lengkap. Silakan coba lagi.');
         return;
       }
 
-      if (!result.invoiceUrl) {
-        toast.error('Link pembayaran tidak tersedia. Silakan coba lagi.');
-        return;
-      }
+      const pendingParams = new URLSearchParams({
+        invoice_id: result.invoiceId || '',
+        subscription_id: result.subscriptionId,
+        method: selectedMethod,
+        invoice_url: result.invoiceUrl,
+      });
 
-      window.location.href = result.invoiceUrl;
+      router.push(`/payment/pending?${pendingParams.toString()}`);
     } catch (error) {
       console.error('Checkout error:', error);
       toast.error('Terjadi kesalahan. Silakan coba lagi.');
@@ -118,6 +116,28 @@ function CheckoutContent() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
           <p className="mt-4 text-gray-600">Memuat checkout...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Gagal Memuat Paket</h2>
+          <p className="text-gray-600 mb-4">{fetchError}</p>
+          <Link
+            href="/dashboard/billing"
+            className="inline-block px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+          >
+            Kembali ke Billing
+          </Link>
         </div>
       </div>
     );

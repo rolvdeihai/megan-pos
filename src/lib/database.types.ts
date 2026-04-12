@@ -893,32 +893,53 @@ export type Database = {
         Row: {
           created_at: string | null
           end_date: string
+          gateway_transaction_id: string | null
           id: string
+          last_gateway_status: string | null
           package_id: string
+          paid_at: string | null
+          payment_channel: string | null
+          payment_gateway: string | null
+          payment_method: string | null
           payment_proof_url: string | null
           start_date: string
           status: string | null
           user_id: string
+          webhook_received_at: string | null
         }
         Insert: {
           created_at?: string | null
           end_date: string
+          gateway_transaction_id?: string | null
           id?: string
+          last_gateway_status?: string | null
           package_id: string
+          paid_at?: string | null
+          payment_channel?: string | null
+          payment_gateway?: string | null
+          payment_method?: string | null
           payment_proof_url?: string | null
           start_date: string
           status?: string | null
           user_id: string
+          webhook_received_at?: string | null
         }
         Update: {
           created_at?: string | null
           end_date?: string
+          gateway_transaction_id?: string | null
           id?: string
+          last_gateway_status?: string | null
           package_id?: string
+          paid_at?: string | null
+          payment_channel?: string | null
+          payment_gateway?: string | null
+          payment_method?: string | null
           payment_proof_url?: string | null
           start_date?: string
           status?: string | null
           user_id?: string
+          webhook_received_at?: string | null
         }
         Relationships: [
           {

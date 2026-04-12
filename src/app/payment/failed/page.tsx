@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { getSubscriptionById } from '@/app/dashboard/billing/actions';
 
 const AUTO_REDIRECT_SECONDS = 8;
 
@@ -39,19 +39,15 @@ function PaymentFailedContent() {
     let mounted = true;
 
     const fetchRetryPackageId = async () => {
-      const { data, error } = await supabase
-        .from('user_subscriptions')
-        .select('package_id')
-        .eq('id', subscriptionId)
-        .maybeSingle();
+      const result = await getSubscriptionById(subscriptionId);
 
-      if (error) {
-        console.error('Failed to resolve retry package from subscription:', error);
+      if (result.error) {
+        console.error('Failed to resolve retry package from subscription:', result.error);
         return;
       }
 
       if (mounted) {
-        setRetryPackageId(data?.package_id || null);
+        setRetryPackageId(result.data?.package_id || null);
       }
     };
 

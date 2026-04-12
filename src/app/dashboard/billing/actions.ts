@@ -1,18 +1,17 @@
 // src/app/dashboard/billing/actions.ts
 // Payment Gateway Billing Actions
-// Supports: simulate, xendit, midtrans
 
 'use server';
 
 import {
   createInvoice,
-  isSimulationMode,
   getPaymentGateway,
 } from '@/lib/payment-gateway';
 import {
   validateSubscriptionChange,
   createPendingSubscription,
 } from '@/lib/subscription';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
@@ -58,8 +57,8 @@ export async function createPaymentInvoice(
       external_id: subscription.id,
       amount: validation.targetPackage.price,
       description: `Berlangganan ${validation.targetPackage.name} - Megan POS`,
-      success_redirect_url: `${BASE_URL}/dashboard/billing?status=success&order_id=${subscription.id}`,
-      failure_redirect_url: `${BASE_URL}/dashboard/billing?status=failed&order_id=${subscription.id}`,
+      success_redirect_url: `${BASE_URL}/payment/callback?status=success&order_id=${subscription.id}`,
+      failure_redirect_url: `${BASE_URL}/payment/callback?status=failed&order_id=${subscription.id}`,
       callback_url: `${BASE_URL}${webhookPath}`,
       currency: 'IDR',
       invoice_duration: 86400, // 24 hours
@@ -83,59 +82,31 @@ export async function createPaymentInvoice(
   }
 }
 
-export interface SimulationResult {
-  success: boolean;
-  error?: string;
+export async function getCurrentSubscription(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('user_subscriptions')
+    .select('*, packages(id, name, price, features)')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[getCurrentSubscription] Error:', error.message);
+    return { error: error.message };
+  }
+  return { data };
 }
 
-export async function simulatePaymentSuccess(
-  subscriptionId: string
-): Promise<SimulationResult> {
-  if (!isSimulationMode()) {
-    return {
-      success: false,
-      error: 'Mode simulasi tidak aktif',
-    };
+export async function getSubscriptionById(subscriptionId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('user_subscriptions')
+    .select('id, status, package_id')
+    .eq('id', subscriptionId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[getSubscriptionById] Error:', error.message);
+    return { error: error.message };
   }
-
-  try {
-    const { activateSubscription } = await import('@/lib/subscription');
-
-    await activateSubscription(subscriptionId, {
-      payment_proof_url: `sim_invoice_${Date.now()}`,
-      payment_method: 'SIMULATED',
-      paid_at: new Date().toISOString(),
-    });
-
-    return { success: true };
-  } catch (error) {
-    console.error('Simulation error:', error);
-    return {
-      success: false,
-      error: 'Simulasi gagal',
-    };
-  }
-}
-
-export async function simulatePaymentFailure(
-  subscriptionId: string
-): Promise<SimulationResult> {
-  if (!isSimulationMode()) {
-    return {
-      success: false,
-      error: 'Mode simulasi tidak aktif',
-    };
-  }
-
-  try {
-    const { expirePendingSubscription } = await import('@/lib/subscription');
-    await expirePendingSubscription(subscriptionId);
-    return { success: true };
-  } catch (error) {
-    console.error('Simulation error:', error);
-    return {
-      success: false,
-      error: 'Simulasi gagal',
-    };
-  }
+  return { data };
 }

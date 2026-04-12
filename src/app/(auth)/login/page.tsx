@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth/AuthProvider';
 
@@ -12,6 +12,8 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const { login } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirect') || '/dashboard';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +24,7 @@ export default function LoginPage() {
       const success = await login(email, password);
 
       if (success) {
-        window.location.href = '/dashboard';
+        window.location.href = redirectTo;
       } else {
         setError('Email atau password salah');
       }

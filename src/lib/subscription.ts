@@ -1,5 +1,5 @@
 // src/lib/subscription.ts
-import { supabase } from './supabase';
+import { supabaseAdmin } from './supabase-admin';
 import type { Database } from './database.types';
 
 type Subscription = Database['public']['Tables']['user_subscriptions']['Row'];
@@ -17,7 +17,7 @@ export async function validateSubscriptionChange(
   packageId: string
 ): Promise<SubscriptionValidationResult> {
   // Check if already on this plan
-  const { data: currentSub } = await supabase
+  const { data: currentSub } = await supabaseAdmin
     .from('user_subscriptions')
     .select('*, packages(*)')
     .eq('user_id', userId)
@@ -33,7 +33,7 @@ export async function validateSubscriptionChange(
   }
 
   // Validate package exists
-  const { data: pkg } = await supabase
+  const { data: pkg } = await supabaseAdmin
     .from('packages')
     .select('*')
     .eq('id', packageId)
@@ -57,11 +57,39 @@ export async function createPendingSubscription(
   userId: string,
   packageId: string
 ): Promise<Subscription> {
+  // Expire any stale pending_payment subscriptions for this user (older than 1 hour)
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  await supabaseAdmin
+    .from('user_subscriptions')
+    .update({ status: 'expired' })
+    .eq('user_id', userId)
+    .eq('status', 'pending_payment')
+    .lt('created_at', oneHourAgo);
+
+  // Check for existing recent pending subscription
+  const { data: existingPending, error: existingPendingError } = await supabaseAdmin
+    .from('user_subscriptions')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('package_id', packageId)
+    .eq('status', 'pending_payment')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingPendingError) {
+    throw new Error(`Failed to check pending subscription: ${existingPendingError.message}`);
+  }
+
+  if (existingPending) {
+    return existingPending;
+  }
+
   const startDate = new Date();
   const endDate = new Date();
   endDate.setDate(endDate.getDate() + 30);
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('user_subscriptions')
     .insert({
       user_id: userId,
@@ -84,12 +112,15 @@ export async function activateSubscription(
   subscriptionId: string,
   paymentDetails: {
     payment_proof_url: string; // Generic payment proof (xendit_invoice_id, midtrans_transaction_id, etc.)
+    payment_gateway?: string;
     payment_method?: string;
+    payment_channel?: string;
     paid_at?: string;
+    gateway_status?: string;
   }
 ): Promise<void> {
   // Get subscription with package info
-  const { data: subscription, error: subError } = await supabase
+  const { data: subscription, error: subError } = await supabaseAdmin
     .from('user_subscriptions')
     .select('*, packages(*)')
     .eq('id', subscriptionId)
@@ -104,18 +135,33 @@ export async function activateSubscription(
     return;
   }
 
+  // Expire other active subscriptions for this user (upgrade/downgrade)
+  await supabaseAdmin
+    .from('user_subscriptions')
+    .update({ status: 'expired' })
+    .eq('user_id', subscription.user_id)
+    .eq('status', 'active')
+    .neq('id', subscriptionId);
+
   const now = new Date();
   const endDate = new Date();
   endDate.setDate(endDate.getDate() + (subscription.packages?.duration_days || 30));
 
   // Update subscription
-  const { error: updateError } = await supabase
+  const { error: updateError } = await supabaseAdmin
     .from('user_subscriptions')
     .update({
       status: 'active',
       start_date: now.toISOString(),
       end_date: endDate.toISOString(),
+      payment_gateway: paymentDetails.payment_gateway || null,
+      payment_method: paymentDetails.payment_method || null,
+      payment_channel: paymentDetails.payment_channel || null,
+      paid_at: paymentDetails.paid_at || now.toISOString(),
+      gateway_transaction_id: paymentDetails.payment_proof_url,
+      last_gateway_status: paymentDetails.gateway_status || 'PAID',
       payment_proof_url: paymentDetails.payment_proof_url,
+      webhook_received_at: now.toISOString(),
     })
     .eq('id', subscriptionId);
 
@@ -124,7 +170,7 @@ export async function activateSubscription(
   }
 
   // Update user tier
-  const { error: userError } = await supabase
+  const { error: userError } = await supabaseAdmin
     .from('users')
     .update({
       subscription_tier: subscription.package_id,
@@ -138,10 +184,31 @@ export async function activateSubscription(
   }
 }
 
-export async function expirePendingSubscription(subscriptionId: string): Promise<void> {
-  const { error } = await supabase
+export async function expirePendingSubscription(
+  subscriptionId: string,
+  paymentDetails?: {
+    payment_proof_url?: string;
+    payment_gateway?: string;
+    payment_method?: string;
+    payment_channel?: string;
+    paid_at?: string;
+    gateway_status?: string;
+  }
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabaseAdmin
     .from('user_subscriptions')
-    .update({ status: 'expired' })
+    .update({
+      status: 'expired',
+      payment_gateway: paymentDetails?.payment_gateway || null,
+      payment_method: paymentDetails?.payment_method || null,
+      payment_channel: paymentDetails?.payment_channel || null,
+      paid_at: paymentDetails?.paid_at || null,
+      gateway_transaction_id: paymentDetails?.payment_proof_url || null,
+      last_gateway_status: paymentDetails?.gateway_status || 'EXPIRED',
+      payment_proof_url: paymentDetails?.payment_proof_url || null,
+      webhook_received_at: now,
+    })
     .eq('id', subscriptionId)
     .eq('status', 'pending_payment');
 
