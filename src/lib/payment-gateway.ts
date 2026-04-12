@@ -7,6 +7,8 @@ export type PaymentGateway = 'simulate' | 'xendit' | 'midtrans';
 
 const PAYMENT_GATEWAY = (process.env.PAYMENT_GATEWAY || 'simulate') as PaymentGateway;
 
+console.log(`[Payment] Gateway: ${PAYMENT_GATEWAY}${PAYMENT_GATEWAY === 'midtrans' ? ` (production: ${process.env.MIDTRANS_IS_PRODUCTION === 'true'})` : ''}`);
+
 export function getPaymentGateway(): PaymentGateway {
   return PAYMENT_GATEWAY;
 }
