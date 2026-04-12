@@ -99,6 +99,38 @@ function PaymentPendingContent() {
     };
   }, [subscriptionId, retryPackageId]);
 
+  // Auto-poll subscription status every 10 seconds
+  useEffect(() => {
+    if (!subscriptionId || redirectingTo) return;
+
+    const POLL_INTERVAL_MS = 1000;
+    let mounted = true;
+
+    const pollStatus = async () => {
+      if (!mounted || redirectingTo) return;
+
+      try {
+        const result = await getSubscriptionById(subscriptionId);
+        if (!mounted || redirectingTo) return;
+
+        if (result.data?.status === 'active') {
+          toast.success('Pembayaran berhasil!');
+          redirectToResult('success');
+        } else if (result.data?.status === 'expired') {
+          toast.error('Pembayaran gagal atau expired.');
+          redirectToResult('failed');
+        }
+      } catch {}
+    };
+
+    const interval = setInterval(pollStatus, POLL_INTERVAL_MS);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [subscriptionId, redirectingTo]);
+
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
