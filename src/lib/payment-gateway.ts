@@ -144,6 +144,7 @@ export interface PaymentMethod {
   category: 'va' | 'qris' | 'ewallet';
   icon: string;
   description: string;
+  gateways?: PaymentGateway[];
 }
 
 // Unified payment methods that work across gateways
@@ -196,6 +197,7 @@ export const PAYMENT_METHODS: PaymentMethod[] = [
     category: 'ewallet',
     icon: '💳',
     description: 'Bayar dengan LinkAja',
+    gateways: ['xendit', 'simulate'],
   },
 ];
 
@@ -217,8 +219,11 @@ const MIDTRANS_METHOD_MAP: Record<string, string> = {
   QRIS: 'qris',
   DANA: 'dana',
   OVO: 'ovo',
-  LINKAJA: 'gopay',
 };
+
+export function getAvailablePaymentMethods(): PaymentMethod[] {
+  return PAYMENT_METHODS.filter((method) => !method.gateways || method.gateways.includes(PAYMENT_GATEWAY));
+}
 
 export function getGatewayMethodCode(methodId: string): string {
   switch (PAYMENT_GATEWAY) {

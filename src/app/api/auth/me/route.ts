@@ -1,6 +1,6 @@
 // src/app/api/auth/me/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import { parseJsonCookie } from '@/lib/cookie-utils';
 import { cookies } from 'next/headers';
 
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ user: null });
     }
 
-    const { data: userData, error } = await supabase
+    const { data: userData, error } = await supabaseAdmin
       .from('users')
       .select('id, email, full_name, restaurant_name, restaurant_slug')
       .eq('id', userId)

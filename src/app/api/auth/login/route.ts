@@ -1,7 +1,7 @@
 // src/app/api/auth/login/route.js
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import { verifyPassword } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     const { email, password } = await request.json();
 
     // 1. Cek apakah user ada di database
-    const { data: userData, error: userError } = await supabase
+    const { data: userData, error: userError } = await supabaseAdmin
       .from('users')
       .select('*')
       .eq('email', email)

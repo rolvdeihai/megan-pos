@@ -3,7 +3,7 @@
 // Payment Method Selector using payment gateway abstraction
 // Supports: simulate, xendit, midtrans
 
-import { PAYMENT_METHODS } from '@/lib/payment-gateway';
+import { getAvailablePaymentMethods } from '@/lib/payment-gateway';
 import type { PaymentMethod } from '@/lib/payment-gateway';
 
 interface PaymentMethodSelectorProps {
@@ -12,9 +12,10 @@ interface PaymentMethodSelectorProps {
 }
 
 export function PaymentMethodSelector({ selected, onSelect }: PaymentMethodSelectorProps) {
-  const vaMethods = PAYMENT_METHODS.filter((m) => m.category === 'va');
-  const qrisMethod = PAYMENT_METHODS.filter((m) => m.category === 'qris');
-  const ewalletMethods = PAYMENT_METHODS.filter((m) => m.category === 'ewallet');
+  const methods = getAvailablePaymentMethods();
+  const vaMethods = methods.filter((m) => m.category === 'va');
+  const qrisMethod = methods.filter((m) => m.category === 'qris');
+  const ewalletMethods = methods.filter((m) => m.category === 'ewallet');
 
   const MethodCard = ({ method }: { method: PaymentMethod }) => (
     <button
