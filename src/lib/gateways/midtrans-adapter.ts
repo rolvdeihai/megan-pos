@@ -28,6 +28,22 @@ function getSnapClient(): InstanceType<typeof Midtrans.Snap> {
 export async function createMidtransInvoice(params: CreateInvoiceParams): Promise<PaymentInvoice> {
   const snap = getSnapClient();
   const durationSeconds = params.invoice_duration || 86400;
+  const primaryMethod = params.payment_methods?.[0];
+
+  const successUrl = new URL(params.success_redirect_url);
+  successUrl.searchParams.set('subscription_id', params.external_id);
+  if (primaryMethod) {
+    successUrl.searchParams.set('method', primaryMethod);
+  }
+
+  const failureUrl = new URL(params.failure_redirect_url);
+  failureUrl.searchParams.set('subscription_id', params.external_id);
+  if (primaryMethod) {
+    failureUrl.searchParams.set('method', primaryMethod);
+  }
+
+  const pendingUrl = new URL(successUrl.toString());
+  pendingUrl.searchParams.set('status', 'pending');
 
   // Build Snap transaction parameter
   // Docs: https://snap-docs.midtrans.com/#json-objects
@@ -47,9 +63,9 @@ export async function createMidtransInvoice(params: CreateInvoiceParams): Promis
     // Set notification URL for webhook callbacks
     // Docs: https://snap-docs.midtrans.com/#override-notification-url
     callbacks: {
-      finish: params.success_redirect_url,
-      error: params.failure_redirect_url,
-      pending: params.success_redirect_url.replace('status=success', 'status=pending'),
+      finish: successUrl.toString(),
+      error: failureUrl.toString(),
+      pending: pendingUrl.toString(),
     },
   };
 
@@ -73,7 +89,19 @@ export async function createMidtransInvoice(params: CreateInvoiceParams): Promis
   };
 
   try {
+    if (params.callback_url) {
+      snap.httpClient.http_client.defaults.headers.common['X-Override-Notification'] = params.callback_url;
+    }
+
+    // Add timeout to prevent hanging (30 seconds)
+    snap.httpClient.http_client.defaults.timeout = 30000;
+
+    console.log('[Midtrans] Creating transaction:', { order_id: parameter.transaction_details.order_id, amount: parameter.transaction_details.gross_amount });
+
     const transaction = await snap.createTransaction(parameter);
+
+    console.log('[Midtrans] Transaction created:', { token: transaction.token, redirect_url: transaction.redirect_url });
+
     return {
       id: transaction.token,
       externalId: params.external_id,
@@ -83,7 +111,7 @@ export async function createMidtransInvoice(params: CreateInvoiceParams): Promis
       expiryDate: new Date(Date.now() + durationSeconds * 1000),
     };
   } catch (error: any) {
-    console.error('Midtrans SDK Error:', error);
+    console.error('[Midtrans] SDK Error:', error?.message || error, error?.response?.data || '');
     throw new Error(`Failed to create Midtrans transaction: ${error.message || 'Unknown error'}`);
   }
 }
@@ -117,7 +145,18 @@ export function verifyMidtransWebhook(payload: string, signature: string): boole
       .update(`${order_id}${status_code}${gross_amount}${MIDTRANS_SERVER_KEY}`)
       .digest('hex');
 
-    const isValid = signature === expectedSignature;
+    const providedSignature = Buffer.from(signature, 'hex');
+    const expectedSignatureBuffer = Buffer.from(expectedSignature, 'hex');
+
+    if (providedSignature.length !== expectedSignatureBuffer.length) {
+      console.warn('Midtrans webhook signature length mismatch');
+      return false;
+    }
+
+    const isValid = crypto.timingSafeEqual(
+      providedSignature,
+      expectedSignatureBuffer
+    );
     if (!isValid) {
       console.warn('Midtrans webhook signature mismatch');
     }
@@ -199,7 +238,6 @@ function mapToMidtransMethod(methodId: string): string {
     DANA: 'dana',
     OVO: 'ovo',
     GOPAY: 'gopay',
-    LINKAJA: 'gopay',
     SHOPEEPAY: 'shopee_pay',
     CREDIT_CARD: 'credit_card',
   };
