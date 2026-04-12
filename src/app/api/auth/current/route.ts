@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getEmployeePermissionsForAuth } from '@/lib/rbac-server';
 import { parseJsonCookie } from '@/lib/cookie-utils';
 import { cookies } from 'next/headers';
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ user: null });
       }
 
-      const { data: userData, error } = await supabase
+      const { data: userData, error } = await supabaseAdmin
         .from('users')
         .select('id, email, full_name, restaurant_name, restaurant_slug, subscription_tier')
         .eq('id', userId)
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Ambil data employee
-      const { data: employeeData, error } = await supabase
+      const { data: employeeData, error } = await supabaseAdmin
         .from('employees')
         .select('id, full_name, role, role_id, email, user_id, roles(name)')
         .eq('id', userId)
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Ambil data restaurant dan subscription dari owner
-      const { data: userData } = await supabase
+      const { data: userData } = await supabaseAdmin
         .from('users')
         .select('restaurant_slug, restaurant_name, subscription_tier')
         .eq('id', originalUserId)

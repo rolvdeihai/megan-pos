@@ -1,6 +1,6 @@
 // src/app/api/auth/register/route.js
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import { hashPassword } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
@@ -8,11 +8,11 @@ export async function POST(request: NextRequest) {
     const { email, password, full_name, phone, restaurant_name } = await request.json();
 
     // 1. Cek apakah email sudah terdaftar
-    const { data: existingUser } = await supabase
+    const { data: existingUser } = await supabaseAdmin
       .from('users')
       .select('email')
       .eq('email', email)
-      .single();
+      .maybeSingle();
 
     if (existingUser) {
       return NextResponse.json(
@@ -37,11 +37,11 @@ export async function POST(request: NextRequest) {
 
     // Cek apakah slug sudah digunakan
     while (true) {
-      const { data: existingSlug } = await supabase
+      const { data: existingSlug } = await supabaseAdmin
         .from('users')
         .select('restaurant_slug')
         .eq('restaurant_slug', restaurant_slug)
-        .single();
+        .maybeSingle();
 
       if (!existingSlug) break;
 
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const userId = crypto.randomUUID();
 
     // 5. Insert user ke database
-    const { error: dbError } = await supabase
+    const { error: dbError } = await supabaseAdmin
       .from('users')
       .insert({
         id: userId,
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     if (dbError) throw dbError;
 
     // 6. Create default restaurant settings
-    const { error: settingsError } = await supabase
+    const { error: settingsError } = await supabaseAdmin
       .from('restaurant_settings')
       .insert({
         user_id: userId,
