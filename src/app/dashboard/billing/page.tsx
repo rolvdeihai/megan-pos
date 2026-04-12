@@ -3,11 +3,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/components/auth/AuthProvider'; // Import useAuth
-import { isSimulationMode, getPaymentGateway } from '@/lib/payment-gateway';
-import { simulatePaymentSuccess, simulatePaymentFailure } from './actions';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { getPaymentGateway } from '@/lib/payment-gateway';
+import { getCurrentSubscription } from './actions';
 import toast from 'react-hot-toast';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -53,8 +52,6 @@ const packages = [
 export default function BillingPage() {
   const [selectedPackage, setSelectedPackage] = useState<string>('pro');
   const [currentSubscription, setCurrentSubscription] = useState<any>(null);
-  const [showSimulation, setShowSimulation] = useState(false);
-  const [simSubscriptionId, setSimSubscriptionId] = useState<string | null>(null);
   const [showSuccessAnim, setShowSuccessAnim] = useState(false);
 
   const router = useRouter();
@@ -90,72 +87,18 @@ export default function BillingPage() {
   const fetchCurrentSubscription = async () => {
     if (!user?.id) return;
 
-    // Ambil data langganan aktif user saat ini
-    const { data, error } = await supabase
-      .from('user_subscriptions')
-      .select('*, packages(id, name, price, features)')
-      .eq('user_id', user.id)
-      .eq('status', 'active')
-      .maybeSingle();
+    const result = await getCurrentSubscription(user.id);
 
-    if (!error && data) {
-      setCurrentSubscription(data);
-      // Set default pilihan ke paket saat ini jika ada
-      if (data.package_id) {
-        setSelectedPackage(data.package_id);
+    if (result.error) {
+      console.error('[Billing] fetchCurrentSubscription error:', result.error);
+      return;
+    }
+
+    if (result.data) {
+      setCurrentSubscription(result.data);
+      if (result.data.package_id) {
+        setSelectedPackage(result.data.package_id);
       }
-    }
-  };
-
-  const handleSimulateSuccess = async () => {
-    if (!simSubscriptionId) {
-      toast.error('Silakan pilih paket dan buat subscription simulasi terlebih dahulu');
-      return;
-    }
-
-    const result = await simulatePaymentSuccess(simSubscriptionId);
-
-    if (result.success) {
-      toast.success('Simulasi: Pembayaran berhasil!');
-      setShowSuccessAnim(true);
-      setTimeout(() => setShowSuccessAnim(false), 1400);
-      setShowSimulation(false);
-      setSimSubscriptionId(null);
-      await fetchCurrentSubscription();
-    } else {
-      toast.error(result.error || 'Simulasi gagal');
-    }
-  };
-
-  const handleSimulateFailure = async () => {
-    if (!simSubscriptionId) {
-      toast.error('Silakan pilih paket dan buat subscription simulasi terlebih dahulu');
-      return;
-    }
-
-    const result = await simulatePaymentFailure(simSubscriptionId);
-
-    if (result.success) {
-      toast.error('Simulasi: Pembayaran gagal/expired');
-      setShowSimulation(false);
-      setSimSubscriptionId(null);
-    } else {
-      toast.error(result.error || 'Simulasi gagal');
-    }
-  };
-
-  const createSimulatedSubscription = async () => {
-    if (!user?.id) return;
-
-    try {
-      const { createPendingSubscription } = await import('@/lib/subscription');
-      const subscription = await createPendingSubscription(user.id, selectedPackage);
-      setSimSubscriptionId(subscription.id);
-      setShowSimulation(true);
-      toast.success('Subscription simulasi dibuat. Pilih hasil pembayaran.');
-    } catch (error) {
-      console.error('Error creating sim subscription:', error);
-      toast.error('Gagal membuat subscription simulasi');
     }
   };
 
@@ -239,7 +182,12 @@ export default function BillingPage() {
           const isCurrentPlan = currentSubscription?.package_id === pkg.id;
           
           return (
-            <div key={pkg.id} className="relative">
+            <div 
+              key={pkg.id} 
+              className={`relative h-full transition-transform duration-300 ${
+                selectedPackage === pkg.id ? 'scale-105 shadow-xl rounded-lg z-10' : 'z-0'
+              }`}
+            >
               {isCurrentPlan && (
                 <motion.div
                   className="absolute -inset-[1.5px] rounded-lg"
@@ -252,22 +200,26 @@ export default function BillingPage() {
                   transition={{ duration: 4.2, repeat: Infinity, ease: 'linear' }}
                 />
               )}
-            <div
-              className={`relative rounded-lg border-2 p-6 transition-all ${
-                selectedPackage === pkg.id
-                  ? 'border-primary bg-primary/10 shadow-lg scale-105'
-                  : 'border-gray-200 hover:border-gray-300 bg-white'
-              }`}
-            >
+              <div
+                className={`relative h-full flex flex-col rounded-lg border-2 p-6 bg-white transition-colors ${
+                  selectedPackage === pkg.id
+                    ? 'border-primary'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                {selectedPackage === pkg.id && (
+                  <div className="absolute inset-0 bg-primary/5 rounded-lg pointer-events-none" />
+                )}
+
               {isCurrentPlan && (
-                <div className="absolute top-0 right-0 -mt-2 -mr-2">
+                <div className="absolute top-0 right-0 -mt-2 -mr-2 z-20">
                    <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-green-500 rounded-full">
                      Aktif
                    </span>
                 </div>
               )}
               
-              <div className="text-center">
+              <div className="text-center relative z-10">
                 <h3 className="text-xl font-bold text-gray-900">{pkg.name}</h3>
                 <div className="mt-4">
                   <span className="text-3xl font-bold">Rp {pkg.price.toLocaleString()}</span>
@@ -275,13 +227,13 @@ export default function BillingPage() {
                 </div>
               </div>
 
-              <ul className="mt-6 space-y-3">
+              <ul className="mt-6 mb-8 space-y-3 flex-grow relative z-10">
                 {pkg.features.map((feature, idx) => (
                   <li key={idx} className="flex items-center">
-                    <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-5 h-5 text-green-500 mr-3 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
-                    {feature}
+                    <span className="text-gray-700">{feature}</span>
                   </li>
                 ))}
               </ul>
@@ -289,11 +241,11 @@ export default function BillingPage() {
               <button
                 onClick={() => setSelectedPackage(pkg.id)}
                 disabled={isCurrentPlan}
-                className={`mt-8 w-full py-2 rounded-md font-medium transition-colors ${
+                className={`mt-auto w-full py-2.5 rounded-md font-medium transition-colors relative z-10 ${
                   selectedPackage === pkg.id
-                    ? 'bg-primary text-white shadow-md'
-                    : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                } ${isCurrentPlan ? 'cursor-default opacity-75' : ''}`}
+                    ? 'bg-primary text-white shadow-md hover:bg-primary/90'
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                } ${isCurrentPlan ? 'cursor-default opacity-90' : ''}`}
               >
                 {isCurrentPlan ? 'Paket Saat Ini' : (selectedPackage === pkg.id ? 'Dipilih' : 'Pilih Paket')}
               </button>
@@ -320,46 +272,8 @@ export default function BillingPage() {
           </a>
         )}
 
-        {isSimulationMode() && currentSubscription?.package_id !== selectedPackage && (
-          <div className="mt-4">
-            {!showSimulation ? (
-              <button
-                onClick={createSimulatedSubscription}
-                className="text-sm text-yellow-600 hover:text-yellow-700 underline"
-              >
-                🧪 Buat Subscription Simulasi
-              </button>
-            ) : (
-              <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg max-w-md mx-auto">
-                <p className="text-sm text-yellow-800 font-medium mb-3">
-                  🧪 Mode Simulasi (Development Only)
-                </p>
-                <p className="text-xs text-yellow-700 mb-4">
-                  Subscription ID: {simSubscriptionId}
-                </p>
-                <div className="flex gap-3 justify-center">
-                  <button
-                    onClick={handleSimulateSuccess}
-                    className="px-4 py-2 bg-green-500 text-white rounded-md text-sm hover:bg-green-600"
-                  >
-                    ✓ Pembayaran Sukses
-                  </button>
-                  <button
-                    onClick={handleSimulateFailure}
-                    className="px-4 py-2 bg-red-500 text-white rounded-md text-sm hover:bg-red-600"
-                  >
-                    ✗ Pembayaran Gagal
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         <p className="mt-4 text-sm text-gray-500">
-          {isSimulationMode()
-            ? '🧪 Mode simulasi aktif - tidak ada pembayaran nyata'
-            : `Pembayaran aman melalui ${getPaymentGateway() === 'midtrans' ? 'Midtrans' : 'Xendit'} (VA, QRIS, E-wallet)`}
+          Pembayaran aman melalui Midtrans (VA, QRIS, E-wallet)
         </p>
       </div>
     </div>
