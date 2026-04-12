@@ -11,6 +11,24 @@ const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY || '';
 const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY || '';
 const MIDTRANS_IS_PRODUCTION = process.env.MIDTRANS_IS_PRODUCTION === 'true';
 
+// Validate Midtrans configuration on module load
+(function validateMidtransConfig() {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || '';
+
+  if (MIDTRANS_IS_PRODUCTION) {
+    if (baseUrl.includes('ngrok')) {
+      console.error('[Midtrans] WARNING: Production mode enabled but NEXT_PUBLIC_BASE_URL uses ngrok. Webhooks will not work reliably.');
+    }
+    if (MIDTRANS_SERVER_KEY.startsWith('SB-')) {
+      console.error('[Midtrans] WARNING: Production mode enabled but Server Key appears to be a sandbox key (SB- prefix).');
+    }
+  } else {
+    if (MIDTRANS_SERVER_KEY && !MIDTRANS_SERVER_KEY.startsWith('SB-')) {
+      console.warn('[Midtrans] Sandbox mode but Server Key lacks SB- prefix. Verify your keys match the environment.');
+    }
+  }
+})();
+
 // Lazy-loaded Midtrans Snap client
 let _snapClient: InstanceType<typeof Midtrans.Snap> | null = null;
 
@@ -131,8 +149,8 @@ export function verifyMidtransWebhook(payload: string, signature: string): boole
   try {
     const notification = JSON.parse(payload);
     const order_id = notification.order_id;
-    const status_code = notification.status_code;
-    const gross_amount = notification.gross_amount;
+    const status_code = String(notification.status_code);
+    const gross_amount = String(notification.gross_amount); // Midtrans may send as number or string
 
     if (!order_id || !status_code || !gross_amount) {
       console.warn('Missing required fields for signature verification');

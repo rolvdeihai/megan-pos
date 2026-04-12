@@ -15,16 +15,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const payload = await request.text();
     const simulationMode = isSimulationMode();
     
-    // Midtrans sends signature in x-signature-key header for Snap notifications
-    // Or it can be passed as signature field in the JSON body
+    // Midtrans sends signature_key in the JSON body for Snap notifications
     // Docs: https://docs.midtrans.com/en/after-payment/http-notification
-    let signature = request.headers.get('x-signature-key') || '';
+    let signature = '';
     let notification: Record<string, any>;
-    
+
     try {
       notification = JSON.parse(payload);
-      // If no header signature, check body signature field
-      if (!signature && notification.signature_key) {
+      // Snap notifications include signature_key in body
+      if (notification.signature_key) {
         signature = notification.signature_key;
       }
     } catch {
