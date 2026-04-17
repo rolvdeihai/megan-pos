@@ -85,6 +85,8 @@ export async function createMidtransInvoice(params: CreateInvoiceParams): Promis
       error: failureUrl.toString(),
       pending: pendingUrl.toString(),
     },
+    // Set notification URL for server-to-server webhook
+    notification_url: params.callback_url,
   };
 
   // Add customer details if provided
