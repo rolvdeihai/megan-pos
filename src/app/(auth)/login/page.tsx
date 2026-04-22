@@ -1,11 +1,13 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth/AuthProvider';
 
-export default function LoginPage() {
+// Component that uses useSearchParams (must be wrapped in Suspense)
+function LoginContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -41,7 +43,7 @@ export default function LoginPage() {
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
         <div>
           <h2 className="text-3xl font-bold text-center text-gray-900">
-            Login ke Megan POS
+            Login ke JetNote Pos
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             Sistem POS tanpa verifikasi email
@@ -112,5 +114,14 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+// Main page component with Suspense boundary
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }

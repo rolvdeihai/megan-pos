@@ -397,7 +397,7 @@ export async function createPaymentInvoice(
     const invoice = await createXenditInvoice({
       external_id: subscription.id,
       amount: validation.targetPackage.price,
-      description: `Berlangganan ${validation.targetPackage.name} - Megan POS`,
+      description: `Berlangganan ${validation.targetPackage.name} - JetNote Pos`,
       success_redirect_url: `${BASE_URL}/dashboard/billing?status=success&order_id=${subscription.id}`,
       failure_redirect_url: `${BASE_URL}/dashboard/billing?status=failed&order_id=${subscription.id}`,
       callback_url: `${BASE_URL}/api/webhooks/xendit`,

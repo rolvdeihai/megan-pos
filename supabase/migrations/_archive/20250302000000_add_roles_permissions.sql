@@ -1,5 +1,5 @@
 -- Add roles, permissions, and role_permissions tables
--- Megan POS - RBAC System
+-- JetNote Pos - RBAC System
 
 -- 1. permissions table
 CREATE TABLE IF NOT EXISTS public.permissions (

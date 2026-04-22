@@ -75,7 +75,7 @@ export async function createMidtransInvoice(params: CreateInvoiceParams): Promis
         id: params.external_id,
         price: params.amount,
         quantity: 1,
-        name: params.description || 'Megan POS Subscription',
+        name: params.description || 'JetNote Pos Subscription',
       },
     ],
     // Set notification URL for webhook callbacks

@@ -116,7 +116,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
     if (printContent) {
       const printWindow = window.open('', '_blank');
       if (printWindow) {
-        const restaurantName = user?.restaurant_name || 'Restoran Megan POS';
+        const restaurantName = user?.restaurant_name || 'Restoran JetNote Pos';
         const createdAt = orderDetails?.created_at ? formatInvoiceDate(orderDetails.created_at) : '-';
         const itemRows = (orderDetails?.items || []).map((item) => `
           <tr>
@@ -622,7 +622,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
             {/* Header */}
             <div className="text-center mb-8">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">INVOICE</h1>
-              <p className="text-gray-600">Restoran Megan POS</p>
+              <p className="text-gray-600">Restoran JetNote Pos</p>
               <p className="text-sm text-gray-500 mt-1">
                 {new Date(orderDetails.created_at).toLocaleDateString('id-ID', {
                   weekday: 'long',

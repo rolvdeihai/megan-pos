@@ -195,7 +195,7 @@ export default function SetupRestaurantPage() {
           <p className="text-lg text-gray-600">
             {settings 
               ? 'Ubah pengaturan restoran Anda kapan saja' 
-              : 'Konfigurasi awal untuk memulai menggunakan Megan POS'}
+              : 'Konfigurasi awal untuk memulai menggunakan JetNote Pos'}
           </p>
           <div className="mt-2 text-sm text-gray-500">
             Restoran: <span className="font-semibold">{user.restaurant_name}</span>

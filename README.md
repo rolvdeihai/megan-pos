@@ -1,6 +1,6 @@
-## Megan POS
+## JetNote Pos
 
-Megan POS adalah aplikasi Point of Sale untuk restoran dengan dashboard owner/staff, menu publik, dan order online. Fitur utama:
+JetNote Pos adalah aplikasi Point of Sale untuk restoran dengan dashboard owner/staff, menu publik, dan order online. Fitur utama:
 - Dashboard manajemen order, menu, meja, inventory, transaksi, billing, dan settings
 - Public menu & order page berdasarkan `restaurant_slug`
 - Staff login via PIN

@@ -1,5 +1,5 @@
 /**
- * Megan POS - Google Apps Script Email Service
+ * JetNote Pos - Google Apps Script Email Service
  * 
  * Cara deploy:
  * 1. Buka https://script.google.com
@@ -12,10 +12,10 @@
 
 // Configuration
 const CONFIG = {
-  APP_NAME: 'Megan POS',
+  APP_NAME: 'JetNote Pos',
   LOGO_URL: '', // Optional: URL logo restoran
   PRIMARY_COLOR: '#3B82F6',
-  FROM_NAME: 'Megan POS Team'
+  FROM_NAME: 'JetNote Pos Team'
 };
 
 /**

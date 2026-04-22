@@ -126,7 +126,7 @@ export default function HomePage() {
     {
       name: 'Budi Santoso',
       role: 'Owner Warung Makan Sederhana',
-      content: 'Setelah pakai Megan POS, operasional restoran saya jadi lebih efisien. Order online dari pelanggan langsung masuk ke sistem, tidak perlu telpon lagi.',
+      content: 'Setelah pakai JetNote Pos, operasional restoran saya jadi lebih efisien. Order online dari pelanggan langsung masuk ke sistem, tidak perlu telpon lagi.',
       avatar: 'BS'
     },
     {
@@ -162,7 +162,7 @@ export default function HomePage() {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
                 <span className="text-white font-bold">M</span>
               </div>
-              <span className="text-xl font-bold text-gray-900">Megan POS</span>
+              <span className="text-xl font-bold text-gray-900">JetNote Pos</span>
             </div>
             <div className="hidden md:flex items-center space-x-8">
               <a href="#features" className="text-gray-700 hover:text-blue-600">Fitur</a>
@@ -199,7 +199,7 @@ export default function HomePage() {
                 <span className="text-blue-600"> Sistem Modern</span>
               </h1>
               <p className="mt-6 text-xl text-gray-600">
-                Megan POS membantu Anda mengelola semua aspek bisnis restoran, dari order, inventori, hingga laporan keuangan, dalam satu platform terintegrasi.
+                JetNote Pos membantu Anda mengelola semua aspek bisnis restoran, dari order, inventori, hingga laporan keuangan, dalam satu platform terintegrasi.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row gap-4">
                 {/* // Edit: Enlarged CTA tap target for tablet comfort and soft corners. */}
@@ -437,7 +437,7 @@ export default function HomePage() {
               Dipercaya oleh Pemilik Restoran
             </h2>
             <p className="text-xl text-gray-600">
-              Lihat apa kata mereka tentang Megan POS
+              Lihat apa kata mereka tentang JetNote Pos
             </p>
           </div>
 
@@ -491,7 +491,7 @@ export default function HomePage() {
             Siap Mengubah Cara Anda Mengelola Restoran?
           </h2>
           <p className="text-xl text-blue-100 mb-8">
-            Bergabung dengan 500+ restoran yang sudah menggunakan Megan POS
+            Bergabung dengan 500+ restoran yang sudah menggunakan JetNote Pos
           </p>
           
           <div className="max-w-md mx-auto">
@@ -528,7 +528,7 @@ export default function HomePage() {
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
                   <span className="text-white font-bold">M</span>
                 </div>
-                <span className="text-xl font-bold">Megan POS</span>
+                <span className="text-xl font-bold">JetNote Pos</span>
               </div>
               <p className="text-gray-400">
                 Sistem manajemen restoran modern untuk bisnis yang lebih efisien.
@@ -565,7 +565,7 @@ export default function HomePage() {
           </div>
           
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; {new Date().getFullYear()} Megan POS. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} JetNote Pos. All rights reserved.</p>
           </div>
         </div>
       </footer>

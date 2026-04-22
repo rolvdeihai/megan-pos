@@ -1,4 +1,4 @@
-# Supabase – Megan POS
+# Supabase – JetNote Pos
 
 ## Membuat tabel (migrasi)
 

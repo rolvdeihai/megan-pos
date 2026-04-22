@@ -73,7 +73,7 @@ try {
 }
 
 console.log("");
-console.log(`${BLUE}🗑️  Resetting Megan POS Database...${NC}`);
+console.log(`${BLUE}🗑️  Resetting JetNote Pos Database...${NC}`);
 console.log("");
 
 // Test connection

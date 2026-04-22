@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Database Reset Script for Megan POS
+# Database Reset Script for JetNote Pos
 # Usage: ./scripts/reset-db.sh [--force] [--env-file .env.local]
 #
 # Options:
@@ -85,7 +85,7 @@ if ! command -v psql &> /dev/null; then
 fi
 
 echo ""
-echo -e "${BLUE}🗑️  Resetting Megan POS Database...${NC}"
+echo -e "${BLUE}🗑️  Resetting JetNote Pos Database...${NC}"
 echo ""
 
 # Test connection

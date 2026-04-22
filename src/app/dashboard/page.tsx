@@ -1,3 +1,4 @@
+// app/dashboard/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -9,8 +10,8 @@ import {
   TableCellsIcon,
   ArrowTrendingUpIcon,
   PlusCircleIcon,
-  QueueListIcon,
   ClipboardDocumentListIcon,
+  QueueListIcon,
   ChartBarIcon,
   UserGroupIcon,
   CreditCardIcon,
@@ -20,6 +21,7 @@ import {
 import { PERMISSIONS, hasPermission } from '@/lib/permissions';
 import { getUserRoleLabel } from '@/lib/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
+import OrdersPage from './orders/page'; // 👈 import komponen OrdersPage
 
 export default function DashboardPage() {
   const { user, isLoading } = useAuth();
@@ -114,7 +116,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* Gradient hero */}
+      {/* Gradient hero (tetap seperti semula) */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-6 sm:p-8 text-white shadow-xl animate-fade-in-up">
         <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/5 rounded-full" />
         <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-white/5 rounded-full" />
@@ -144,20 +146,17 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stat cards */}
+      {/* Stat cards (tetap) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {statCards.map((card, i) => (
           <motion.div
             key={card.label}
-            // Customize premium stat-card animation here.
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, delay: (i + 1) * 0.08, ease: 'easeOut' }}
             whileHover={{ scale: 1.02 }}
             className={`group relative overflow-hidden rounded-2xl border border-white/40 bg-white/70 backdrop-blur-md p-5 sm:p-6 shadow-xl hover:shadow-2xl ${card.shadow} transition-all duration-300`}
-            style={{ animationDelay: `${(i + 1) * 100}ms` }}
           >
-            {/* Customize gradient accent style here. */}
             <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white/40 via-transparent to-primary/10" />
             <div
               className={`relative z-10 inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${card.gradient} text-white mb-4 shadow-lg ${card.shadow}`}
@@ -176,40 +175,46 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Quick actions */}
-      <div className="animate-fade-in-up" style={{ animationDelay: '500ms' }}>
-        <div className="mb-5">
-          <h2 className="text-lg font-bold text-slate-900">Aksi Cepat</h2>
-          <p className="text-sm text-slate-500 mt-0.5">Akses fitur sesuai izin yang dimiliki</p>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-          {allowedActions.map((action, i) => (
-            <motion.div
-              key={action.href}
-              // Customize quick-action animation here.
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.45 + i * 0.06, ease: 'easeOut' }}
-              whileHover={{ scale: 1.02 }}
-            >
-              <Link
-                href={action.href}
-                className={`group relative overflow-hidden flex flex-col items-center gap-3 rounded-2xl p-5 sm:p-6 border border-white/40 bg-white/65 backdrop-blur-md ${action.bg} ${action.bgHover} transition-all duration-300 shadow-xl hover:shadow-2xl hover:ring-2 ${action.ring}`}
-              >
-                {/* Customize action-card glow colors here. */}
-                <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white/35 via-transparent to-primary/10" />
-                <div
-                  className={`relative z-10 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center ${action.color} bg-white shadow-sm group-hover:scale-110 transition-transform duration-300`}
+      {/* Layout 2 kolom: Sidebar (Quick Actions) + Main (OrdersPage) */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Sidebar: Quick Actions (vertikal) */}
+        <aside className="w-full lg:w-80 shrink-0 space-y-3">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 p-4 shadow-sm sticky top-24">
+            <h2 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
+              <span className="w-1 h-4 bg-primary rounded-full"></span>
+              Aksi Cepat
+            </h2>
+            <div className="space-y-2">
+              {allowedActions.map((action) => (
+                <Link
+                  key={action.href}
+                  href={action.href}
+                  className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 ${action.bg} ${action.bgHover} hover:ring-2 ${action.ring}`}
                 >
-                  <action.icon className="w-6 h-6 sm:w-7 sm:h-7" />
-                </div>
-                <span className={`relative z-10 text-sm font-semibold ${action.color} text-center`}>
-                  {action.label}
-                </span>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
+                  <div className={`${action.color} shrink-0`}>
+                    <action.icon className="w-5 h-5" />
+                  </div>
+                  <span className={`text-sm font-medium ${action.color}`}>
+                    {action.label}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Content: OrdersPage */}
+        <main className="flex-1 min-w-0">
+          {/* 
+            OrdersPage akan dirender di sini. 
+            Agar tidak ada konflik padding/margin eksternal, kita bungkus dengan div 
+            dan beri class negatif margin jika diperlukan. 
+            Karena OrdersPage sudah memiliki padding sendiri, kita cukup membiarkannya.
+          */}
+          <div className="-mt-4 -mx-4 sm:-mx-6 lg:mt-0 lg:mx-0">
+            <OrdersPage />
+          </div>
+        </main>
       </div>
     </div>
   );

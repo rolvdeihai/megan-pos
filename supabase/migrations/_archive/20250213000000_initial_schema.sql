@@ -1,4 +1,4 @@
--- Megan POS – Initial schema (users, roles, permissions, role_permissions, employees)
+-- JetNote Pos – Initial schema (users, roles, permissions, role_permissions, employees)
 -- Sesuai src/lib/database.types.ts
 
 -- Enable UUID extension if not already

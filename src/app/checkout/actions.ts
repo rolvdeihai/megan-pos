@@ -85,7 +85,7 @@ export async function initiateCheckout(params: CheckoutParams): Promise<Checkout
     const invoice = await createInvoice({
       external_id: subscription.id,
       amount: validation.targetPackage.price,
-      description: `Berlangganan ${validation.targetPackage.name} - Megan POS`,
+      description: `Berlangganan ${validation.targetPackage.name} - JetNote Pos`,
       payment_methods: [paymentMethod],
       success_redirect_url: `${BASE_URL}/payment/callback?status=success&order_id=${subscription.id}`,
       failure_redirect_url: `${BASE_URL}/payment/callback?status=failed&order_id=${subscription.id}`,

@@ -209,7 +209,7 @@ export default function Navbar({ mode, restaurant, settings, showAuthControls = 
                     {/* Logo */}
                     <div className="flex items-center">
                         <Link href="/dashboard" className="text-xl font-bold text-slate-900 mr-6">
-                            Megan POS
+                            JetNote Pos
                         </Link>
 
                         {/* Desktop Menu */}

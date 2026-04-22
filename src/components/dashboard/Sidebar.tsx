@@ -141,7 +141,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               <span className="text-white font-bold text-sm">M</span>
             </div>
             <div>
-              <h1 className="text-base font-bold text-white">Megan POS</h1>
+              <h1 className="text-base font-bold text-white">JetNote Pos</h1>
               <p className="text-[11px] text-slate-400 truncate max-w-[160px]">
                 {restaurant?.restaurant_name || 'Restaurant'}
               </p>

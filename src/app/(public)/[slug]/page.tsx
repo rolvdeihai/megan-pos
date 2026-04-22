@@ -767,7 +767,7 @@ export default function PublicOrderPage() {
                                   </p>
                                   {table.today_booking_ranges.length > 0 ? (
                                     <div className="mt-2 flex flex-wrap gap-2">
-                                      {table.today_booking_ranges.slice(0, 3).map((range) => (
+                                      {table.today_booking_ranges.slice(0, 3).map((range: string) => (
                                         <span
                                           key={`${table.id}-${range}`}
                                           className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700"

@@ -77,7 +77,7 @@ import type { Invoice, InvoiceCallback, CreateInvoiceRequest } from '@/lib/xendi
 const invoice = await createXenditInvoice({
   external_id: 'sub_123',
   amount: 500000,
-  description: 'Pro Package - Megan POS',
+  description: 'Pro Package - JetNote Pos',
   currency: 'IDR',
   invoice_duration: 86400, // 24 hours
   success_redirect_url: 'https://yoursite.com/success',

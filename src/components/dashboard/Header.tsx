@@ -99,7 +99,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
       {
         id: '1',
         type: 'system',
-        title: 'Welcome to Megan POS',
+        title: 'Welcome to JetNote Pos',
         message: 'Selamat datang di sistem restoran Anda!',
         time: '2024-01-01T10:00:00Z',
         read: true,

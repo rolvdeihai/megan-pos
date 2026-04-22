@@ -1,5 +1,5 @@
 // src/lib/xendit.ts
-// Xendit SDK integration for Megan POS
+// Xendit SDK integration for JetNote Pos
 // Docs: https://github.com/xendit/xendit-node
 
 import type {
@@ -78,7 +78,7 @@ export async function createXenditInvoice(
       externalId: params.external_id,
       userId: 'sim_user',
       status: 'PENDING' as any,
-      merchantName: 'Megan POS (Simulation)',
+      merchantName: 'JetNote Pos (Simulation)',
       merchantProfilePictureUrl: '',
       amount: params.amount,
       expiryDate,
@@ -100,7 +100,7 @@ export async function createXenditInvoice(
   const request: CreateInvoiceRequest = {
     externalId: params.external_id,
     amount: params.amount,
-    description: params.description || 'Megan POS Subscription',
+    description: params.description || 'JetNote Pos Subscription',
     currency: (params.currency as any) || 'IDR',
     invoiceDuration: params.invoice_duration || 86400, // 24 hours in seconds
     successRedirectUrl: params.success_redirect_url,

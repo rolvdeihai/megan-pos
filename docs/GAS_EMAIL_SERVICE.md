@@ -1,12 +1,12 @@
-# Megan POS - Google Apps Script Email Service
+# JetNote Pos - Google Apps Script Email Service
 
-Dokumentasi lengkap untuk layanan email Megan POS menggunakan Google Apps Script (GAS).
+Dokumentasi lengkap untuk layanan email JetNote Pos menggunakan Google Apps Script (GAS).
 
 ---
 
 ## 📋 Overview
 
-Script ini digunakan untuk mengirim email dari aplikasi Megan POS melalui Google Apps Script Web App. Mendukung pengiriman:
+Script ini digunakan untuk mengirim email dari aplikasi JetNote Pos melalui Google Apps Script Web App. Mendukung pengiriman:
 - OTP Signup Verification
 - OTP Forgot Password
 - OTP General Verification
@@ -28,7 +28,7 @@ Script ini digunakan untuk mengirim email dari aplikasi Megan POS melalui Google
 1. Klik **Deploy** → **New Deployment**
 2. Klik ikon gear (⚙️) pilih **Web App**
 3. Isi konfigurasi:
-   - **Description**: `Megan POS Email Service`
+   - **Description**: `JetNote Pos Email Service`
    - **Execute as**: `Me`
    - **Who has access**: `Anyone`
 4. Klik **Deploy**
@@ -50,7 +50,7 @@ Simpan kode berikut di Google Apps Script Editor:
 
 ```javascript
 /**
- * Megan POS - Google Apps Script Email Service
+ * JetNote Pos - Google Apps Script Email Service
  * 
  * Cara deploy:
  * 1. Buka https://script.google.com
@@ -63,10 +63,10 @@ Simpan kode berikut di Google Apps Script Editor:
 
 // Configuration
 const CONFIG = {
-  APP_NAME: 'Megan POS',
+  APP_NAME: 'JetNote Pos',
   LOGO_URL: '', // Optional: URL logo restoran
   PRIMARY_COLOR: '#3B82F6',
-  FROM_NAME: 'Megan POS Team'
+  FROM_NAME: 'JetNote Pos Team'
 };
 
 /**
@@ -569,5 +569,5 @@ Lihat: [GAS Quota](https://developers.google.com/apps-script/guides/services/quo
 
 ## 👤 Author
 
-**Megan POS Team**  
-Dibuat untuk sistem Point of Sale Megan POS
+**JetNote Pos Team**  
+Dibuat untuk sistem Point of Sale JetNote Pos
