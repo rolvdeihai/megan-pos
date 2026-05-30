@@ -1,3 +1,5 @@
+// src/app/api/send-email/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 
 const GOOGLE_APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_GOOGLE_APPS_SCRIPT_EMAIL_URL || process.env.GOOGLE_APPS_SCRIPT_EMAIL_URL;

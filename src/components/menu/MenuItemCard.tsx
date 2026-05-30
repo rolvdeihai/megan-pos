@@ -10,10 +10,27 @@ interface MenuItemCardProps {
   settings: any;
 }
 
+// Helper: konversi Google Drive URL ke format yang bisa di-embed
+function getImageUrl(url: string): string {
+  if (!url) return '';
+
+  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+
+  if (match) {
+    const fileId = match[1];
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
+  }
+
+  return url;
+}
+
 export default function MenuItemCard({ item, restaurantSlug, settings }: MenuItemCardProps) {
   const [quantity, setQuantity] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const isSoldOut = item.effective_is_available === false;
+
+  const imageUrl = getImageUrl(item.image_url || '');
 
   const addToCart = () => {
     if (isSoldOut) {
@@ -33,7 +50,6 @@ export default function MenuItemCard({ item, restaurantSlug, settings }: MenuIte
     localStorage.setItem(`cart_${restaurantSlug}`, JSON.stringify(cart));
     setQuantity(prev => prev + 1);
     
-    // Show success message
     alert(`${item.name} ditambahkan ke keranjang!`);
   };
 
@@ -51,7 +67,6 @@ export default function MenuItemCard({ item, restaurantSlug, settings }: MenuIte
 
   return (
     <motion.div
-      // Customize premium animation timing/easing here.
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: 'easeOut' }}
@@ -62,15 +77,22 @@ export default function MenuItemCard({ item, restaurantSlug, settings }: MenuIte
           : 'border-white/40 bg-white/70 hover:border-primary/30'
       }`}
     >
-      {/* Customize gradient colors for premium border glow here. */}
       <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white/40 via-transparent to-primary/10" />
 
-      {item.image_url ? (
+      {/* Bagian gambar dengan fallback */}
+      {imageUrl && !imgError ? (
         <div className="h-48 overflow-hidden relative z-10">
           <img
-            src={item.image_url}
+            src={imageUrl}
             alt={item.name}
+            referrerPolicy="no-referrer"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            // onError={() => setImgError(true)}
+            loading="lazy"
+            onError={(e) => {
+              console.log("Image failed:", imageUrl);
+              setImgError(true);
+            }}
           />
         </div>
       ) : (

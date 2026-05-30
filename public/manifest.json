@@ -1,10 +1,10 @@
 {
   "name": "JetNote Pos",
-  "short_name": "MeganPOS",
+  "short_name": "JetNote",
   "description": "Sistem Point of Sale Modern untuk Restoran",
   "start_url": "/",
   "display": "standalone",
-  "theme_color": "#FF6B6B",
+  "theme_color": "#FAFAFA",
   "background_color": "#FAFAFA",
   "icons": [
     { "src": "/icons/icon-72.png", "sizes": "72x72", "type": "image/png" },

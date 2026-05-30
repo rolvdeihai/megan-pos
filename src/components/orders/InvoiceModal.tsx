@@ -47,6 +47,8 @@ interface OrderDetails {
 }
 
 export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModalProps) {
+  const { user } = useAuth();
+  const [sendingEmail, setSendingEmail] = useState(false);
   const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<string>('');
@@ -449,7 +451,6 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
   };
 
   const [isProcessing, setIsProcessing] = useState(false);
-  const { user } = useAuth();
 
   // ==================== INVENTORY & EXPENSE PROCESSING ====================
   const processInventoryAndExpenses = async (skipStockUpdate = false) => {
@@ -569,6 +570,69 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
     }
   };
 
+  const handleSendToOwner = async () => {
+    // Guard: ensure orderDetails exists (should not happen, but satisfies TypeScript)
+    if (!orderDetails) {
+      alert('Data order belum tersedia.');
+      return;
+    }
+
+    if (!user?.email) {
+      alert('Email owner tidak ditemukan.');
+      return;
+    }
+
+    // Get the current invoice HTML from the DOM
+    const invoiceElement = document.getElementById('invoice-content');
+    if (!invoiceElement) {
+      alert('Konten invoice tidak ditemukan.');
+      return;
+    }
+
+    // Clone to avoid altering the displayed content
+    const clone = invoiceElement.cloneNode(true) as HTMLElement;
+    // Remove any interactive buttons (e.g., the Cetak button inside the clone)
+    clone.querySelectorAll('button').forEach(btn => btn.remove());
+
+    const invoiceHtml = clone.outerHTML;
+
+    // Prepare items array for the email
+    const itemsForEmail = orderDetails.items.map(item => ({
+      name: item.name,
+      quantity: item.quantity,
+      price: item.unit_price,
+    }));
+
+    setSendingEmail(true);
+    try {
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'invoice_owner',
+          email: user.email,
+          orderNumber: orderDetails.order_number,
+          customerName: orderDetails.customer_name,
+          totalAmount: orderDetails.total_amount,
+          items: itemsForEmail,
+          invoiceHtml,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert('Salinan invoice berhasil dikirim ke email owner.');
+      } else {
+        alert('Gagal mengirim email: ' + (result.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Terjadi kesalahan saat mengirim email.');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   const calculateChange = (received: number) => {
     const total = orderDetails?.total_amount || 0;
     setCashReceived(received);
@@ -600,6 +664,7 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
             <p className="text-sm text-gray-600">Order #{orderDetails.order_number}</p>
           </div>
           <div className="flex items-center space-x-3">
+            {/* Cetak button */}
             <button
               onClick={handlePrint}
               className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
@@ -607,10 +672,25 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
               <PrinterIcon className="w-5 h-5 mr-2" />
               Cetak
             </button>
+
+            {/* NEW: Send Email button */}
             <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full"
+              onClick={handleSendToOwner}
+              disabled={sendingEmail}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
+              {sendingEmail ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2" />
+              ) : (
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              )}
+              Send Email
+            </button>
+
+            {/* Close button */}
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
               <XMarkIcon className="w-6 h-6 text-gray-500" />
             </button>
           </div>

@@ -814,42 +814,67 @@ export default function TransactionsPage() {
   Only include items that are clearly expenses (purchases, bills). If the text contains multiple line items, you may combine them into one expense or split if they are separate transactions. Return **only** the JSON array, no explanation or markdown.
 
   Examples:
-  Input: "Toko Maju Jaya\nBeras 5kg - 60.000\nMinyak 2L - 30.000\nTotal 90.000\nCash"
+  Input: "Toko Maju Jaya\\nBeras 5kg - 60.000\\nMinyak 2L - 30.000\\nTotal 90.000\\nCash"
   Output: [{"amount":90000,"category":"Bahan Baku","payment_method":"cash","notes":"Pembelian beras dan minyak"}]
 
-  Input: "PLN bulan Januari 2024\nBiaya listrik 450.000\nTransfer BCA"
+  Input: "PLN bulan Januari 2024\\nBiaya listrik 450.000\\nTransfer BCA"
   Output: [{"amount":450000,"category":"Listrik","payment_method":"transfer","notes":"Listrik Jan 2024"}]
 
   OCR text:
   """${ocrText}"""`;
 
-    const response = await fetch('https://fatmagician-megan-ai.hf.space/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: prompt, context: '' })
-    });
+    const apiKey = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY;
+    const model = process.env.NEXT_PUBLIC_DEEPSEEK_MODEL || 'deepseek-chat';
+    const baseUrl = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
 
-    if (!response.ok) throw new Error('Gagal menghubungi AI');
-
-    const data = await response.json();
-    let jsonText = data.response;
-
-    const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) jsonText = jsonMatch[1];
+    if (!apiKey) {
+      console.error('DeepSeek API key missing');
+      return [];
+    }
 
     try {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a precise JSON extractor for expense receipts. Respond only with valid JSON arrays, no extra text.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.2,
+          max_tokens: 2000
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`DeepSeek API error ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      const aiResponse = data.choices?.[0]?.message?.content || '';
+
+      if (!aiResponse) return [];
+
+      // Bersihkan markdown
+      let jsonText = aiResponse.trim();
+      const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) jsonText = jsonMatch[1];
+
       const parsed = JSON.parse(jsonText);
-      return Array.isArray(parsed)
-        ? parsed.map((item) => ({
-            amount: item.amount,
-            type: 'expense',
-            category: item.category,
-            payment_method: item.payment_method,
-            notes: item.notes,
-          }))
-        : [];
-    } catch (e) {
-      console.error('Invalid AI response:', jsonText);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.error('Error calling DeepSeek API for expense:', error);
       return [];
     }
   };

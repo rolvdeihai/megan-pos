@@ -111,48 +111,72 @@ export default function InventoryPage() {
   const parseInventoryWithAI = async (ocrText: string): Promise<ParsedInventoryItem[]> => {
     const prompt = `Extract inventory items from the following OCR text. Return a JSON array of objects with these exact fields:
   - name (string, required)
-  - sku (string, optional, if present e.g. "INV-001")
-  - category (string, optional, e.g. "Bahan Pokok", "Minuman")
-  - unit (string, optional, e.g. "kg", "pcs", "liter", "pack") – if not present, assume "pcs"
-  - current_stock (number, optional, if a quantity is mentioned, otherwise omit or set to 0)
-  - minimum_stock (number, optional, if a reorder level is mentioned, otherwise omit or set to 10)
-  - cost_per_unit (number, optional, if a price per unit is mentioned, otherwise omit or set to 0)
-  - supplier (string, optional, if a supplier name is mentioned)
+  - sku (string, optional)
+  - category (string, optional)
+  - unit (string, optional) – default "pcs"
+  - current_stock (number, optional) – default 0 if not mentioned
+  - minimum_stock (number, optional) – default 10
+  - cost_per_unit (number, optional) – default 0
+  - supplier (string, optional)
 
-  Only include items that are clearly inventory items (goods, ingredients, supplies). If the text contains multiple sections, merge them. Return **only** the JSON array, no explanation or markdown.
-
-  Examples:
-  Input: "SKU001, Beras 5kg, 50 kg, Reorder 10 kg, Rp 12000/kg, Supplier: UD Maju"
-  Output: [{"name":"Beras","sku":"SKU001","category":"Bahan Pokok","unit":"kg","current_stock":50,"minimum_stock":10,"cost_per_unit":12000,"supplier":"UD Maju"}]
-
-  Input: "Gula Pasir 1kg @15000, stok 30"
-  Output: [{"name":"Gula Pasir","unit":"kg","cost_per_unit":15000,"current_stock":30}]
-
-  Input: "Minyak Goreng 2L, stok 12, reorder 5, supplier: IndoFood"
-  Output: [{"name":"Minyak Goreng","unit":"liter","current_stock":12,"minimum_stock":5,"supplier":"IndoFood"}]
+  Only include items that are clearly inventory items. If the text contains multiple lines, parse each line as one item.
+  Return **only** the JSON array, no explanation or markdown.
 
   OCR text:
   """${ocrText}"""`;
 
-    const response = await fetch('https://fatmagician-megan-ai.hf.space/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: prompt, context: '' })
-    });
+    const apiKey = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY;
+    const model = process.env.NEXT_PUBLIC_DEEPSEEK_MODEL || 'deepseek-chat';
+    const baseUrl = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
 
-    if (!response.ok) throw new Error('Gagal menghubungi AI');
-
-    const data = await response.json();
-    let jsonText = data.response;
-
-    const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) jsonText = jsonMatch[1];
+    if (!apiKey) {
+      console.error('DeepSeek API key missing');
+      return [];
+    }
 
     try {
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a precise JSON extractor for inventory data. Respond only with valid JSON arrays, no extra text.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.2,
+          max_tokens: 2000
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`DeepSeek API error ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      const aiResponse = data.choices?.[0]?.message?.content || '';
+
+      if (!aiResponse) return [];
+
+      // Bersihkan markdown
+      let jsonText = aiResponse.trim();
+      const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) jsonText = jsonMatch[1];
+
       const parsed = JSON.parse(jsonText);
       return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
-      console.error('Invalid AI response:', jsonText);
+    } catch (error) {
+      console.error('Error calling DeepSeek API for inventory:', error);
       return [];
     }
   };

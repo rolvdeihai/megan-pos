@@ -241,6 +241,25 @@ export default function MenuPage() {
     return chunks;
   };
 
+  function normalizeImageUrl(url: string): string {
+    if (!url) return '';
+
+    const driveMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (driveMatch) {
+      const fileId = driveMatch[1];
+      return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
+    }
+
+    if (url.includes('drive.google.com/uc?export=view')) {
+      const idMatch = url.match(/id=([a-zA-Z0-9_-]+)/);
+      if (idMatch) {
+        return `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w1200`;
+      }
+    }
+
+    return url;
+  }
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -331,52 +350,78 @@ export default function MenuPage() {
   - name (string, required)
   - description (string, can be empty)
   - price (number, if missing set to 0)
-  - category (string, e.g. "Appetizer", "Main Course", "Makanan Pembuka", "Minuman")
+  - category (string, e.g. "Appetizer", "Main Course", "Freeze Dried Treats", "Air Dried Treats")
   - tags (array of strings, e.g. ["pedas", "vegetarian"])
 
-  Only include items that are clearly dishes. If the text contains multiple sections, merge them. Return **only** the JSON array, no explanation or markdown.
-
-  Examples:
-  Input: "APPETIZERS\\nSpring Rolls ........ 5.99\\nCrispy fried spring rolls"
-  Output: [{"name":"Spring Rolls","description":"Crispy fried spring rolls","price":5.99,"category":"Appetizer","tags":[]}]
-
-  Input: "MAKANAN UTAMA\\nNasi Goreng .......... 8.50\\nNasi goreng dengan ayam dan udang"
-  Output: [{"name":"Nasi Goreng","description":"Nasi goreng dengan ayam dan udang","price":8.50,"category":"Makanan Utama","tags":[]}]
+  Only include items that are clearly dishes. If the text contains section titles like "Freeze Dried Treats", use them as the category for following items until the next section title. 
+  The last number in a line is usually the price (remove thousand separators like commas). 
+  Return **only** the JSON array, no explanation or markdown.
 
   OCR text:
   """${ocrText}"""`;
 
-    const response = await fetch('https://fatmagician-megan-ai.hf.space/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: prompt, context: '' })
-    });
+    const apiKey = process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY;
+    const model = process.env.NEXT_PUBLIC_DEEPSEEK_MODEL || 'deepseek-chat';
+    const baseUrl = process.env.NEXT_PUBLIC_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
 
-    if (!response.ok) throw new Error('Gagal menghubungi AI');
-
-    const data = await response.json();
-    console.log('AI raw response:', data.response); // Debug log
-
-    let jsonText = data.response;
-
-    // Remove markdown code fences if present
-    const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) jsonText = jsonMatch[1];
+    if (!apiKey) {
+      console.error('DeepSeek API key missing');
+      return [];
+    }
 
     try {
-      const parsed = JSON.parse(jsonText);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      } else if (parsed && typeof parsed === 'object') {
-        // Try to find an array property (e.g., { items: [...] })
-        const possibleArray = Object.values(parsed).find(Array.isArray);
-        if (possibleArray) return possibleArray;
+      const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a precise JSON extractor. Respond only with valid JSON arrays, no extra text.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.2,
+          max_tokens: 2000
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`DeepSeek API error ${response.status}: ${errorText}`);
       }
-      console.warn('AI response is not an array:', parsed);
+
+      const data = await response.json();
+      const aiResponse = data.choices?.[0]?.message?.content || '';
+
+      if (!aiResponse) {
+        console.warn('Empty response from DeepSeek');
+        return [];
+      }
+
+      // Bersihkan markdown code fence jika ada
+      let jsonText = aiResponse.trim();
+      const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) jsonText = jsonMatch[1];
+
+      const parsed = JSON.parse(jsonText);
+      if (Array.isArray(parsed)) return parsed;
+      // coba cari array di dalam object
+      const possibleArray = Object.values(parsed).find(Array.isArray);
+      if (possibleArray) return possibleArray;
+      
+      console.warn('DeepSeek response not an array:', parsed);
       return [];
-    } catch (e) {
-      console.error('Invalid AI response:', jsonText);
-      return []; // Return empty array instead of throwing
+    } catch (error) {
+      console.error('Error calling DeepSeek API:', error);
+      return [];
     }
   };
 
@@ -388,6 +433,8 @@ export default function MenuPage() {
 
     const { recipeItems, ...restForm } = itemForm;
 
+    const finalImageUrl = normalizeImageUrl(itemForm.image_url);
+
     const itemData = {
       ...restForm,
       sku,
@@ -396,6 +443,7 @@ export default function MenuPage() {
       cost_price: parseFloat(itemForm.cost_price) || 0,
       preparation_time: parseInt(itemForm.preparation_time) || 0,
       tags: itemForm.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
+      image_url: finalImageUrl,
     };
 
     try {

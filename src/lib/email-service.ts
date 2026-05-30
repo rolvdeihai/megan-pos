@@ -1,3 +1,4 @@
+// src/lib/email-service.ts
 // Email Service using Google Apps Script via Proxy API
 // This service sends emails via /api/send-email to bypass CORS
 
