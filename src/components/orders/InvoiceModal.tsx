@@ -533,13 +533,13 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
       if (data.duplicate) {
         console.log('Duplicate transaction detected', data);
         if (data.shouldProcessInventory) {
-          // Full processing (stock + expenses) because order was pending
           await processInventoryAndExpenses(false);
         } else {
-          // Only create missing expenses (stock already correct)
           await processInventoryAndExpenses(true);
         }
-        onComplete();
+        // ✅ JANGAN PANGGIL onComplete()
+        await fetchOrderDetails(); // refresh data order
+        alert('Pembayaran sudah tercatat sebelumnya, invoice diperbarui.');
         return;
       }
 
@@ -547,21 +547,25 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
         if (data.error?.includes('duplicate') || data.error?.includes('unique_transaction_per_order')) {
           console.log('Duplicate error, processing missing expenses');
           await processInventoryAndExpenses(true);
-          onComplete();
+          await fetchOrderDetails();
+          alert('Pembayaran sudah tercatat, invoice diperbarui.');
           return;
         }
         throw new Error(data.error || 'Gagal memproses pembayaran');
       }
 
-      // First-time success – full processing
+      // First-time success
       await processInventoryAndExpenses(false);
-      onComplete();
+      await fetchOrderDetails(); // ✅ refresh data order
+      alert('Pembayaran berhasil! Invoice telah diperbarui.');
+
     } catch (error: any) {
       console.error('Error processing payment:', error);
       if (error.message?.includes('duplicate') || error.message?.includes('unique_transaction_per_order')) {
         console.log('Duplicate in error, processing missing expenses');
         await processInventoryAndExpenses(true);
-        onComplete();
+        await fetchOrderDetails();
+        alert('Pembayaran sudah tercatat, invoice diperbarui.');
         return;
       }
       alert(error.message || 'Terjadi kesalahan saat memproses pembayaran');

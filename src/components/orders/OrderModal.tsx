@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { XMarkIcon, PlusIcon, MinusIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, PlusIcon, MinusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { buildTableAvailability, type TableOrderStatus } from '@/lib/table-availability';
 import { combineReservationDateTime, getLocalDateInput, getLocalTimeInput } from '@/lib/reservation-datetime';
 import { motion } from 'framer-motion';
@@ -28,7 +28,7 @@ interface Table {
   table_number: string;
   table_name?: string;
   capacity: number;
-  is_available?: boolean; // add this line
+  is_available?: boolean;
 }
 
 interface OrderModalProps {
@@ -73,9 +73,19 @@ export default function OrderModal({
   const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateInput());
   const [selectedHour, setSelectedHour] = useState<string>(() => getLocalTimeInput());
 
-  const filteredItems = selectedCategoryId === 'all'
-    ? menuItems
-    : menuItems.filter(item => item.category_id === selectedCategoryId);
+  // New state for tabs and search
+  const [activeTab, setActiveTab] = useState<'table' | 'menu'>('table');
+  const [tableSearchQuery, setTableSearchQuery] = useState('');
+  const [menuSearchQuery, setMenuSearchQuery] = useState('');
+
+  const filteredItems = useMemo(() => {
+    const items = selectedCategoryId === 'all'
+      ? menuItems
+      : menuItems.filter(item => item.category_id === selectedCategoryId);
+    if (!menuSearchQuery.trim()) return items;
+    const lowerQuery = menuSearchQuery.toLowerCase();
+    return items.filter(item => item.name.toLowerCase().includes(lowerQuery));
+  }, [selectedCategoryId, menuItems, menuSearchQuery]);
 
   const selectedTime = combineReservationDateTime(selectedDate, selectedHour);
   const effectiveSelectedTime = selectedTime || combineReservationDateTime(getLocalDateInput(), getLocalTimeInput());
@@ -83,6 +93,15 @@ export default function OrderModal({
     () => buildTableAvailability(tables, activeTableOrders, effectiveSelectedTime),
     [tables, activeTableOrders, effectiveSelectedTime]
   );
+
+  const filteredTables = useMemo(() => {
+    if (!tableSearchQuery.trim()) return tableOptions;
+    const lowerQuery = tableSearchQuery.toLowerCase();
+    return tableOptions.filter(table => 
+      table.table_number.toLowerCase().includes(lowerQuery) ||
+      (table.table_name && table.table_name.toLowerCase().includes(lowerQuery))
+    );
+  }, [tableOptions, tableSearchQuery]);
 
   useEffect(() => {
     if (!selectedTable) return;
@@ -169,11 +188,6 @@ export default function OrderModal({
       return;
     }
 
-    // if ((orderType === 'takeaway' || orderType === 'delivery') && !customerPhone) {
-    //   alert('Nomor telepon wajib diisi untuk order Takeaway dan Delivery');
-    //   return;
-    // }
-
     if (orderType === 'delivery' && !deliveryAddress) {
       alert('Alamat pengiriman wajib diisi untuk delivery');
       return;
@@ -201,9 +215,318 @@ export default function OrderModal({
     onSubmit(orderData);
   };
 
+  // Reset active tab when order type changes
+  useEffect(() => {
+    if (orderType === 'dine_in') {
+      setActiveTab('table');
+    } else {
+      setActiveTab('menu');
+    }
+  }, [orderType]);
+
+  // Helper to render table selection content
+  const renderTableTab = () => (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Tanggal Reservasi
+        </label>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
+          min={getLocalDateInput()}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Jam Reservasi
+        </label>
+        <input
+          type="time"
+          value={selectedHour}
+          onChange={(e) => setSelectedHour(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
+        />
+        <p className="mt-1 text-xs text-gray-500">
+          Tanggal otomatis hari ini, tinggal pilih jam jika perlu diubah.
+        </p>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Pilih Meja
+          </label>
+          <div className="relative w-48">
+            <MagnifyingGlassIcon className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Cari meja..."
+              value={tableSearchQuery}
+              onChange={(e) => setTableSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
+            />
+          </div>
+        </div>
+        {filteredTables.length === 0 ? (
+          <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
+            {tableOptions.length === 0 
+              ? "Tidak ada meja yang tersedia. Harap tambahkan meja di menu Kelola Meja, atau selesaikan pesanan dine-in yang sedang aktif."
+              : "Tidak ada meja yang sesuai dengan pencarian."}
+          </div>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 max-h-[400px] overflow-y-auto pr-1">
+            {filteredTables.map((table) => {
+              const isSelected = selectedTable === table.id;
+              return (
+                <button
+                  key={table.id}
+                  type="button"
+                  onClick={() => table.is_selectable && setSelectedTable(table.id)}
+                  disabled={!table.is_selectable}
+                  className={`rounded-xl border p-4 text-left transition ${isSelected
+                    ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
+                    : table.is_selectable
+                      ? 'border-gray-200 hover:border-primary/40 hover:shadow-sm'
+                      : 'border-amber-200 bg-amber-50/70 opacity-90'
+                    } ${!table.is_selectable ? 'cursor-not-allowed' : ''}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-gray-900">
+                        {table.table_name || `Meja ${table.table_number}`}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Kapasitas {table.capacity} orang
+                      </p>
+                    </div>
+                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${table.is_selectable
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-amber-100 text-amber-800'
+                      }`}>
+                      {table.availability_label}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Slot Dipilih
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-slate-900">
+                      {table.selected_slot_label}
+                    </p>
+                  </div>
+
+                  <div className="mt-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Jadwal Terpakai
+                    </p>
+                    {table.today_booking_ranges.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {table.today_booking_ranges.map((range) => (
+                          <span
+                            key={`${table.id}-${range}`}
+                            className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
+                          >
+                            {range}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-xs text-gray-500">Kosong sepanjang hari.</p>
+                    )}
+                  </div>
+
+                  {table.availability_hint && (
+                    <p className="mt-3 text-xs text-gray-600">{table.availability_hint}</p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Helper to render menu browsing content
+  const renderMenuTab = () => (
+    <div>
+      {/* Search Bar for Menu */}
+      <div className="mb-6">
+        <div className="relative">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Cari menu..."
+            value={menuSearchQuery}
+            onChange={(e) => setMenuSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-primary/30 focus:border-primary"
+          />
+        </div>
+      </div>
+
+      {/* Menu Categories */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-3">
+          Kategori Menu
+        </label>
+        <div className="flex space-x-2 overflow-x-auto pb-2">
+          <button
+            type="button"
+            onClick={() => setSelectedCategoryId('all')}
+            className={`px-4 py-2 rounded-full whitespace-nowrap ${selectedCategoryId === 'all'
+              ? 'bg-primary text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+          >
+            Semua
+          </button>
+          {categories.map(category => (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => setSelectedCategoryId(category.id)}
+              className={`px-4 py-2 rounded-full whitespace-nowrap ${selectedCategoryId === category.id
+                ? 'bg-primary text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Menu Items Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[480px] overflow-y-auto pr-1">
+        {filteredItems.length === 0 ? (
+          <div className="col-span-full text-center py-8 text-gray-500">
+            {menuSearchQuery ? "Tidak ada menu yang sesuai dengan pencarian." : "Tidak ada menu di kategori ini."}
+          </div>
+        ) : (
+          filteredItems.map(item => (
+            <div
+              key={item.id}
+              className={`border rounded-lg p-4 transition-shadow ${item.effective_is_available === false
+                ? 'bg-gray-50 border-red-200'
+                : 'hover:shadow-md'
+                }`}
+            >
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900">{item.name}</h3>
+                  <p className="text-lg font-bold text-primary mt-1">
+                    Rp {item.price.toLocaleString()}
+                  </p>
+                  {item.preparation_time && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      ⏱️ {item.preparation_time} menit
+                    </p>
+                  )}
+                  {item.effective_is_available === false && (
+                    <p className="text-xs text-red-600 mt-2">
+                      {item.sold_out_reason || 'Menu ini sedang habis'}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => addToCart(item)}
+                  disabled={item.effective_is_available === false}
+                  className={`ml-2 p-2 rounded-full ${item.effective_is_available === false
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-primary/10 text-primary hover:bg-primary/20'
+                    }`}
+                >
+                  <PlusIcon className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className={`text-sm px-2 py-1 rounded ${item.effective_is_available === false
+                  ? 'bg-red-100 text-red-800'
+                  : item.is_available
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                  }`}>
+                  {item.effective_is_available === false ? 'Habis' : item.is_available ? 'Tersedia' : 'Habis'}
+                </span>
+                {cart.find(cartItem => cartItem.id === item.id) && (
+                  <span className="text-sm text-gray-600">
+                    {cart.find(cartItem => cartItem.id === item.id)?.quantity} ×
+                  </span>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  // Helper to render customer details for takeaway/delivery
+  const renderCustomerDetails = () => (
+    <div className="mb-6 space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Nama Customer
+          </label>
+          <input
+            type="text"
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
+            placeholder="Nama customer"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            No. Telepon
+          </label>
+          <input
+            type="tel"
+            value={customerPhone}
+            onChange={(e) => setCustomerPhone(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
+            placeholder="08xxxxxxxxxx (opsional)"
+          />
+        </div>
+      </div>
+      {orderType === 'delivery' && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Alamat Pengiriman
+          </label>
+          <textarea
+            value={deliveryAddress}
+            onChange={(e) => setDeliveryAddress(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
+            rows={3}
+            placeholder="Alamat lengkap untuk pengiriman"
+            required
+          />
+        </div>
+      )}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Catatan (Optional)
+        </label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
+          rows={2}
+          placeholder="Catatan khusus untuk order ini"
+        />
+      </div>
+    </div>
+  );
+
   return (
     <motion.div
-      // Customize modal backdrop animation here.
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -211,7 +534,6 @@ export default function OrderModal({
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
     >
       <motion.div
-        // Customize modal scale/fade animation here.
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.98 }}
@@ -233,7 +555,7 @@ export default function OrderModal({
         </div>
 
         <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
-          {/* Left Panel - Menu Items */}
+          {/* Left Panel - Order Details & Menu */}
           <div className="w-full lg:w-2/3 border-b lg:border-b-0 lg:border-r overflow-y-auto">
             <div className="p-4 sm:p-6">
               {/* Order Type Selection */}
@@ -263,272 +585,48 @@ export default function OrderModal({
                 </div>
               </div>
 
-              {/* Order Details */}
-              <div className="mb-6 space-y-4">
-                {orderType === 'dine_in' && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Tanggal Reservasi
-                      </label>
-                      <input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
-                        min={getLocalDateInput()}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Jam Reservasi
-                      </label>
-                      <input
-                        type="time"
-                        value={selectedHour}
-                        onChange={(e) => setSelectedHour(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">
-                        Tanggal otomatis hari ini, tinggal pilih jam jika perlu diubah.
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Pilih Meja
-                      </label>
-                      {tableOptions.length === 0 ? (
-                        <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
-                          Tidak ada meja yang tersedia. Harap tambahkan meja di menu Kelola Meja, atau selesaikan pesanan dine-in yang sedang aktif.
-                        </div>
-                      ) : (
-                        <div className="grid gap-3 md:grid-cols-2">
-                          {tableOptions.map((table) => {
-                            const isSelected = selectedTable === table.id;
-                            return (
-                              <button
-                                key={table.id}
-                                type="button"
-                                onClick={() => table.is_selectable && setSelectedTable(table.id)}
-                                disabled={!table.is_selectable}
-                                className={`rounded-xl border p-4 text-left transition ${isSelected
-                                  ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
-                                  : table.is_selectable
-                                    ? 'border-gray-200 hover:border-primary/40 hover:shadow-sm'
-                                    : 'border-amber-200 bg-amber-50/70 opacity-90'
-                                  } ${!table.is_selectable ? 'cursor-not-allowed' : ''}`}
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <div>
-                                    <p className="font-semibold text-gray-900">
-                                      {table.table_name || `Meja ${table.table_number}`}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                      Kapasitas {table.capacity} orang
-                                    </p>
-                                  </div>
-                                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${table.is_selectable
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-amber-100 text-amber-800'
-                                    }`}>
-                                    {table.availability_label}
-                                  </span>
-                                </div>
-
-                                <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2">
-                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                    Slot Dipilih
-                                  </p>
-                                  <p className="mt-1 text-sm font-medium text-slate-900">
-                                    {table.selected_slot_label}
-                                  </p>
-                                </div>
-
-                                <div className="mt-3">
-                                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                    Jadwal Terpakai
-                                  </p>
-                                  {table.today_booking_ranges.length > 0 ? (
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                      {table.today_booking_ranges.map((range) => (
-                                        <span
-                                          key={`${table.id}-${range}`}
-                                          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
-                                        >
-                                          {range}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="mt-1 text-xs text-gray-500">Kosong sepanjang hari.</p>
-                                  )}
-                                </div>
-
-                                {table.availability_hint && (
-                                  <p className="mt-3 text-xs text-gray-600">{table.availability_hint}</p>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {(orderType === 'takeaway' || orderType === 'delivery') && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Nama Customer
-                      </label>
-                      <input
-                        type="text"
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
-                        placeholder="Nama customer"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        No. Telepon
-                      </label>
-                      <input
-                        type="tel"
-                        value={customerPhone}
-                        onChange={(e) => setCustomerPhone(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
-                        placeholder="08xxxxxxxxxx (opsional)"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {orderType === 'delivery' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Alamat Pengiriman
-                    </label>
-                    <textarea
-                      value={deliveryAddress}
-                      onChange={(e) => setDeliveryAddress(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
-                      rows={3}
-                      placeholder="Alamat lengkap untuk pengiriman"
-                      required
-                    />
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Catatan (Optional)
-                  </label>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
-                    rows={2}
-                    placeholder="Catatan khusus untuk order ini"
-                  />
-                </div>
-              </div>
-
-              {/* Menu Categories */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Kategori Menu
-                </label>
-                <div className="flex space-x-2 overflow-x-auto pb-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCategoryId('all')}
-                    className={`px-4 py-2 rounded-full whitespace-nowrap ${selectedCategoryId === 'all'
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                  >
-                    Semua
-                  </button>
-                  {categories.map(category => (
-                    <button
-                      key={category.id}
-                      type="button"
-                      onClick={() => setSelectedCategoryId(category.id)}
-                      className={`px-4 py-2 rounded-full whitespace-nowrap ${selectedCategoryId === category.id
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                    >
-                      {category.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Menu Items Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filteredItems.map(item => (
-                  <div
-                    key={item.id}
-                    className={`border rounded-lg p-4 transition-shadow ${item.effective_is_available === false
-                      ? 'bg-gray-50 border-red-200'
-                      : 'hover:shadow-md'
-                      }`}
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900">{item.name}</h3>
-                        <p className="text-lg font-bold text-primary mt-1">
-                          Rp {item.price.toLocaleString()}
-                        </p>
-                        {item.preparation_time && (
-                          <p className="text-sm text-gray-500 mt-1">
-                            ⏱️ {item.preparation_time} menit
-                          </p>
-                        )}
-                        {item.effective_is_available === false && (
-                          <p className="text-xs text-red-600 mt-2">
-                            {item.sold_out_reason || 'Menu ini sedang habis'}
-                          </p>
-                        )}
-                      </div>
+              {/* For Dine In: Show Tabs (Table & Menu) */}
+              {orderType === 'dine_in' ? (
+                <>
+                  <div className="border-b border-gray-200 mb-6">
+                    <nav className="flex space-x-4">
                       <button
-                        onClick={() => addToCart(item)}
-                        disabled={item.effective_is_available === false}
-                        className={`ml-2 p-2 rounded-full ${item.effective_is_available === false
-                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                          : 'bg-primary/10 text-primary hover:bg-primary/20'
-                          }`}
+                        onClick={() => setActiveTab('table')}
+                        className={`py-2 px-1 font-medium text-sm border-b-2 transition ${
+                          activeTab === 'table'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
                       >
-                        <PlusIcon className="w-5 h-5" />
+                        Pilih Meja
                       </button>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className={`text-sm px-2 py-1 rounded ${item.effective_is_available === false
-                        ? 'bg-red-100 text-red-800'
-                        : item.is_available
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                        }`}>
-                        {item.effective_is_available === false ? 'Habis' : item.is_available ? 'Tersedia' : 'Habis'}
-                      </span>
-                      {cart.find(cartItem => cartItem.id === item.id) && (
-                        <span className="text-sm text-gray-600">
-                          {cart.find(cartItem => cartItem.id === item.id)?.quantity} ×
-                        </span>
-                      )}
-                    </div>
+                      <button
+                        onClick={() => setActiveTab('menu')}
+                        className={`py-2 px-1 font-medium text-sm border-b-2 transition ${
+                          activeTab === 'menu'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                        Pilih Menu
+                      </button>
+                    </nav>
                   </div>
-                ))}
-              </div>
+                  <div className="tab-content">
+                    {activeTab === 'table' ? renderTableTab() : renderMenuTab()}
+                  </div>
+                </>
+              ) : (
+                // For Takeaway/Delivery: Show only Menu tab content (no tabs)
+                <>
+                  {renderCustomerDetails()}
+                  {renderMenuTab()}
+                </>
+              )}
             </div>
           </div>
 
-          {/* Right Panel - Cart */}
+          {/* Right Panel - Cart (unchanged) */}
           <div className="w-full lg:w-1/3 flex flex-col min-h-[280px]">
             <div className="p-4 sm:p-6 border-b">
               <h3 className="text-lg font-semibold text-gray-900">Keranjang</h3>

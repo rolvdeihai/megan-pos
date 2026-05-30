@@ -178,7 +178,7 @@ export default function DashboardPage() {
       {/* Layout 2 kolom: Sidebar (Quick Actions) + Main (OrdersPage) */}
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar: Quick Actions (vertikal) */}
-        <aside className="w-full lg:w-80 shrink-0 space-y-3">
+        {/* <aside className="w-full lg:w-80 shrink-0 space-y-3">
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 p-4 shadow-sm sticky top-24">
             <h2 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
               <span className="w-1 h-4 bg-primary rounded-full"></span>
@@ -201,7 +201,7 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
-        </aside>
+        </aside> */}
 
         {/* Main Content: OrdersPage */}
         <main className="flex-1 min-w-0">
