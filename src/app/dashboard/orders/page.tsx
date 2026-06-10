@@ -416,7 +416,7 @@ export default function OrdersPage() {
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
             >
-              <span>Order Aktif</span>
+              <span>Order Belum Terselesaikan</span>
               <span className="rounded-full bg-white/90 px-2 py-0.5 text-xs font-semibold text-slate-700">{orderSummary.active}</span>
             </button>
             <button

@@ -133,6 +133,7 @@ export const DASHBOARD_ROUTE_PERMISSIONS: Array<{ prefix: string; permission: Pe
   { prefix: '/dashboard/orders', permission: PERMISSIONS.MANAGE_ORDERS },
   { prefix: '/dashboard/tables', permission: PERMISSIONS.MANAGE_ORDERS },
   { prefix: '/dashboard/transactions', permission: PERMISSIONS.VIEW_REPORTS },
+  { prefix: '/dashboard/analytics', permission: PERMISSIONS.VIEW_REPORTS },
   { prefix: '/dashboard/billing', permission: PERMISSIONS.MANAGE_BILLING },
   { prefix: '/dashboard/attendance', permission: PERMISSIONS.MANAGE_ATTENDANCE },
   { prefix: '/dashboard/payroll', permission: PERMISSIONS.MANAGE_PAYROLL },

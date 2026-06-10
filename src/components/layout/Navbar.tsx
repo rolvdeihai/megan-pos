@@ -18,6 +18,7 @@ import {
   Cog6ToothIcon,
   CreditCardIcon,
   ArrowRightOnRectangleIcon,
+  PresentationChartLineIcon
 } from '@heroicons/react/24/outline';
 import { getUserRoleLabel, getVisibleDashboardNavItems } from '@/lib/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -37,6 +38,7 @@ const iconMap: Record<string, any> = {
   Menu: ClipboardDocumentListIcon,
   Tables: TableCellsIcon,
   Transactions: ChartBarIcon,
+  Analitik: PresentationChartLineIcon,
   Employees: UserGroupIcon,
   Settings: Cog6ToothIcon,
   Billing: CreditCardIcon,

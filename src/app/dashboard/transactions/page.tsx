@@ -1,3 +1,5 @@
+// app/dashboard/transactions/page.tsx
+
 'use client';
 
 import { useState, useEffect, type Dispatch, type SetStateAction } from 'react';
@@ -408,6 +410,62 @@ export default function TransactionsPage() {
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showIncomeModal, setShowIncomeModal] = useState(false);
+  const [incomeForm, setIncomeForm] = useState({
+    amount: '',
+    payment_method: 'cash',
+    notes: '',
+    income_category: 'other',
+    income_date: new Date().toISOString().split('T')[0],
+  });
+  const [incomeLoading, setIncomeLoading] = useState(false);
+
+  const openIncomeModal = () => {
+    setIncomeForm({
+      amount: '',
+      payment_method: 'cash',
+      notes: '',
+      income_category: 'other',
+      income_date: new Date().toISOString().split('T')[0],
+    });
+    setShowIncomeModal(true);
+  };
+
+  const handleSubmitIncome = async () => {
+    if (!user?.id) return;
+    if (!incomeForm.amount || parseFloat(incomeForm.amount) <= 0) {
+      alert('Jumlah harus lebih dari 0');
+      return;
+    }
+    setIncomeLoading(true);
+    try {
+      const ownerId = user.user_type === 'staff' ? user.user_id : user.id;
+      const transactionNumber = `INC-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+      const notes = `[MANUAL_INCOME] ${incomeForm.income_category}: ${incomeForm.notes || 'Pemasukan manual'}`;
+      const transactionDate = new Date(incomeForm.income_date);
+      transactionDate.setHours(12, 0, 0, 0);
+      const { error } = await supabase.from('transactions').insert({
+        user_id: ownerId,
+        transaction_number: transactionNumber,
+        type: 'sale', // gunakan sale untuk mencatat pemasukan
+        amount: parseFloat(incomeForm.amount),
+        payment_method: incomeForm.payment_method,
+        status: 'completed',
+        notes: notes,
+        created_at: transactionDate.toISOString(),
+      });
+      if (error) throw error;
+      setShowIncomeModal(false);
+      setShowSuccessAnim(true);
+      setTimeout(() => setShowSuccessAnim(false), 1300);
+      fetchTransactions();
+    } catch (err: any) {
+      console.error(err);
+      alert('Gagal menambah pemasukan: ' + err.message);
+    } finally {
+      setIncomeLoading(false);
+    }
+  };
 
   // Form state
   const [formData, setFormData] = useState({
@@ -498,7 +556,10 @@ export default function TransactionsPage() {
   };
 
   const isImportedIncomeTransaction = (transaction: Transaction) => {
-    return transaction.type === 'sale' && (transaction.notes || '').startsWith('[OCR_INCOME]');
+    return transaction.type === 'sale' && (
+      (transaction.notes || '').startsWith('[OCR_INCOME]') ||
+      (transaction.notes || '').startsWith('[MANUAL_INCOME]')
+    );
   };
 
   const getDisplayTransactionType = (transaction: Transaction): 'sale' | 'refund' | 'expense' | 'income' => {
@@ -1549,6 +1610,13 @@ export default function TransactionsPage() {
                 <ReceiptRefundIcon className="w-5 h-5 mr-2" />
                 Tambah Refund
               </button>
+              <button
+                onClick={openIncomeModal}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
+              >
+                <PlusIcon className="w-5 h-5 mr-2" />
+                Tambah Pemasukan
+              </button>
               {/* New upload button */}
               <button
                 onClick={() => document.getElementById('expense-image-upload')?.click()}
@@ -2010,6 +2078,111 @@ export default function TransactionsPage() {
                     <PlusIcon className="w-5 h-5 mr-2" />
                     {modalType === 'expense' ? 'Simpan Pengeluaran' : 'Simpan Refund'}
                   </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showIncomeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                <PlusIcon className="w-6 h-6 mr-3 text-green-600" />
+                Tambah Pemasukan Manual
+              </h2>
+              <button onClick={() => setShowIncomeModal(false)} className="p-2 hover:bg-gray-100 rounded-full">
+                <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Jumlah (Rp) *</label>
+                <input
+                  type="number"
+                  value={incomeForm.amount}
+                  onChange={(e) => setIncomeForm({ ...incomeForm, amount: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="Masukkan jumlah"
+                  min="1"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Metode Pembayaran</label>
+                <select
+                  value={incomeForm.payment_method}
+                  onChange={(e) => setIncomeForm({ ...incomeForm, payment_method: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="qris">QRIS</option>
+                  <option value="transfer">Transfer Bank</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Kategori Pemasukan</label>
+                <select
+                  value={incomeForm.income_category}
+                  onChange={(e) => setIncomeForm({ ...incomeForm, income_category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="other">Lainnya</option>
+                  <option value="donation">Donasi</option>
+                  <option value="investment">Investasi</option>
+                  <option value="refund">Pengembalian dana</option>
+                  <option value="sale">Penjualan non-order</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tanggal Transaksi</label>
+                <input
+                  type="date"
+                  value={incomeForm.income_date}
+                  onChange={(e) => setIncomeForm({ ...incomeForm, income_date: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Catatan</label>
+                <textarea
+                  value={incomeForm.notes}
+                  onChange={(e) => setIncomeForm({ ...incomeForm, notes: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="Contoh: Donasi dari sponsor, Investasi, dll."
+                />
+              </div>
+            </div>
+
+            <div className="mt-8 flex justify-end space-x-4">
+              <button onClick={() => setShowIncomeModal(false)} className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+                Batal
+              </button>
+              <button
+                onClick={handleSubmitIncome}
+                disabled={incomeLoading}
+                className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:opacity-50 flex items-center"
+              >
+                {incomeLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Menyimpan...
+                  </>
+                ) : (
+                  'Simpan Pemasukan'
                 )}
               </button>
             </div>

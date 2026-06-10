@@ -20,6 +20,7 @@ import {
   CurrencyDollarIcon,
   ShieldCheckIcon,
   GlobeAltIcon,
+  PresentationChartLineIcon,
 } from '@heroicons/react/24/outline';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -99,6 +100,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     '/dashboard/menu': RectangleStackIcon,
     '/dashboard/orders': ShoppingBagIcon,
     '/dashboard/transactions': ChartBarIcon,
+    '/dashboard/analytics': PresentationChartLineIcon,
     '/dashboard/inventory': BuildingStorefrontIcon,
     '/dashboard/employees': UserGroupIcon,
     '/dashboard/settings': Cog6ToothIcon,

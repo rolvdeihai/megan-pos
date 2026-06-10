@@ -29,18 +29,54 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Stats sederhana - gunakan userId (owner id) untuk filter
-    const [revenueResult, ordersResult, tablesResult] = await Promise.all([
-      supabase.from('transactions').select('amount').eq('user_id', userId).eq('type', 'sale'),
-      supabase.from('orders').select('id').eq('user_id', userId),
-      supabase.from('restaurant_tables').select('id').eq('user_id', userId).eq('is_available', false)
-    ]);
+    // Ambil query parameters untuk filter tanggal
+    const searchParams = request.nextUrl.searchParams;
+    const startDate = searchParams.get('start_date');
+    const endDate = searchParams.get('end_date');
+
+    // Query untuk total revenue (sale) dengan filter tanggal opsional
+    let revenueQuery = supabase
+      .from('transactions')
+      .select('amount')
+      .eq('user_id', userId)
+      .eq('type', 'sale');
+
+    if (startDate) {
+      revenueQuery = revenueQuery.gte('created_at', startDate);
+    }
+    if (endDate) {
+      revenueQuery = revenueQuery.lte('created_at', endDate);
+    }
+
+    const revenueResult = await revenueQuery;
+
+    // Query untuk total orders dengan filter tanggal opsional
+    let ordersQuery = supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (startDate) {
+      ordersQuery = ordersQuery.gte('created_at', startDate);
+    }
+    if (endDate) {
+      ordersQuery = ordersQuery.lte('created_at', endDate);
+    }
+
+    const ordersResult = await ordersQuery;
+
+    // Active tables (tidak perlu filter tanggal)
+    const tablesResult = await supabase
+      .from('restaurant_tables')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('is_available', false);
 
     const totalRevenue = revenueResult.data?.reduce((sum, t) => sum + (Number(t.amount) || 0), 0) || 0;
-    const totalOrders = ordersResult.data?.length || 0;
+    const totalOrders = ordersResult.count || 0;
     const activeTables = tablesResult.data?.length || 0;
 
-    // Today's revenue
+    // Today's revenue (tetap hari ini, tidak terpengaruh filter)
     const today = new Date().toISOString().split('T')[0];
     const { data: todayRevenueData } = await supabase
       .from('transactions')

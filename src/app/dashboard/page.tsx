@@ -21,7 +21,9 @@ import {
 import { PERMISSIONS, hasPermission } from '@/lib/permissions';
 import { getUserRoleLabel } from '@/lib/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
-import OrdersPage from './orders/page'; // 👈 import komponen OrdersPage
+import OrdersPage from './orders/page';
+
+type DateRange = 'today' | '7days' | '30days' | 'thisMonth' | 'lastMonth';
 
 export default function DashboardPage() {
   const { user, isLoading } = useAuth();
@@ -32,17 +34,70 @@ export default function DashboardPage() {
     todayRevenue: 0,
   });
   const [statsLoading, setStatsLoading] = useState(true);
+  const [dateRange, setDateRange] = useState<DateRange>('thisMonth');
+
+  // Helper: konversi pilihan range ke start_date & end_date (ISO string)
+  const getDateRangeParams = (range: DateRange) => {
+    const now = new Date();
+    let start: Date | null = null;
+    let end: Date | null = new Date();
+    end.setHours(23, 59, 59, 999);
+
+    switch (range) {
+      case 'today':
+        start = new Date();
+        start.setHours(0, 0, 0, 0);
+        break;
+      case '7days':
+        start = new Date();
+        start.setDate(start.getDate() - 6);
+        start.setHours(0, 0, 0, 0);
+        break;
+      case '30days':
+        start = new Date();
+        start.setDate(start.getDate() - 29);
+        start.setHours(0, 0, 0, 0);
+        break;
+      case 'thisMonth':
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        start.setHours(0, 0, 0, 0);
+        break;
+      case 'lastMonth':
+        start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth(), 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      default:
+        start = null;
+        end = null;
+    }
+    return { startDate: start?.toISOString(), endDate: end?.toISOString() };
+  };
+
+  const fetchStats = async (range: DateRange) => {
+    if (!user) return;
+    setStatsLoading(true);
+    try {
+      const { startDate, endDate } = getDateRangeParams(range);
+      let url = '/api/dashboard/stats?';
+      if (startDate) url += `start_date=${encodeURIComponent(startDate)}&`;
+      if (endDate) url += `end_date=${encodeURIComponent(endDate)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      setStats(data);
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (user) {
-      setStatsLoading(true);
-      fetch('/api/dashboard/stats')
-        .then(res => res.json())
-        .then(data => setStats(data))
-        .catch(console.error)
-        .finally(() => setStatsLoading(false));
+      fetchStats(dateRange);
     }
-  }, [user]);
+  }, [user, dateRange]);
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('id-ID', {
@@ -114,9 +169,20 @@ export default function DashboardPage() {
 
   const allowedActions = quickActions.filter(a => hasPermission(permissions, a.permission));
 
+  const getRangeLabel = (range: DateRange) => {
+    switch (range) {
+      case 'today': return 'Hari Ini';
+      case '7days': return '7 Hari Terakhir';
+      case '30days': return '30 Hari Terakhir';
+      case 'thisMonth': return 'Bulan Ini';
+      case 'lastMonth': return 'Bulan Lalu';
+      default: return 'Periode';
+    }
+  };
+
   return (
     <div className="space-y-8">
-      {/* Gradient hero (tetap seperti semula) */}
+      {/* Gradient hero */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-6 sm:p-8 text-white shadow-xl animate-fade-in-up">
         <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/5 rounded-full" />
         <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-white/5 rounded-full" />
@@ -125,7 +191,7 @@ export default function DashboardPage() {
         <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <p className="text-blue-200 text-sm font-medium tracking-wide uppercase">
-              Ringkasan Hari Ini
+              Ringkasan {getRangeLabel(dateRange)}
             </p>
             <h1 className="text-2xl sm:text-3xl font-bold mt-1">
               Selamat datang, {user.full_name || 'Admin'}!
@@ -146,7 +212,35 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stat cards (tetap) */}
+      {/* Filter Dropdown (tanpa date picker) */}
+      <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 p-4 shadow-sm">
+        <div className="flex flex-wrap gap-3 items-center">
+          <span className="text-sm font-medium text-gray-700">Filter Periode:</span>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'today', label: 'Hari Ini' },
+              { value: '7days', label: '7 Hari' },
+              { value: '30days', label: '30 Hari' },
+              { value: 'thisMonth', label: 'Bulan Ini' },
+              { value: 'lastMonth', label: 'Bulan Lalu' },
+            ].map((item) => (
+              <button
+                key={item.value}
+                onClick={() => setDateRange(item.value as DateRange)}
+                className={`px-3 py-1.5 text-sm rounded-full transition ${
+                  dateRange === item.value
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {statCards.map((card, i) => (
           <motion.div
@@ -175,9 +269,8 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Layout 2 kolom: Sidebar (Quick Actions) + Main (OrdersPage) */}
+      {/* Quick Actions + OrdersPage (sama seperti sebelumnya) */}
       <div className="flex flex-col lg:flex-row gap-6">
-        {/* Sidebar: Quick Actions (vertikal) */}
         {/* <aside className="w-full lg:w-80 shrink-0 space-y-3">
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200 p-4 shadow-sm sticky top-24">
             <h2 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
@@ -203,14 +296,7 @@ export default function DashboardPage() {
           </div>
         </aside> */}
 
-        {/* Main Content: OrdersPage */}
         <main className="flex-1 min-w-0">
-          {/* 
-            OrdersPage akan dirender di sini. 
-            Agar tidak ada konflik padding/margin eksternal, kita bungkus dengan div 
-            dan beri class negatif margin jika diperlukan. 
-            Karena OrdersPage sudah memiliki padding sendiri, kita cukup membiarkannya.
-          */}
           <div className="-mt-4 -mx-4 sm:-mx-6 lg:mt-0 lg:mx-0">
             <OrdersPage />
           </div>

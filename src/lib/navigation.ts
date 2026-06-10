@@ -13,6 +13,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: 'Tables', href: '/dashboard/tables', permission: PERMISSIONS.MANAGE_ORDERS },
   { label: 'Inventory', href: '/dashboard/inventory', permission: PERMISSIONS.MANAGE_INVENTORY },
   { label: 'Transactions', href: '/dashboard/transactions', permission: PERMISSIONS.VIEW_REPORTS },
+  { href: '/dashboard/analytics', label: 'Analitik', permission: PERMISSIONS.VIEW_REPORTS },
   { label: 'Employees', href: '/dashboard/employees', permission: PERMISSIONS.MANAGE_STAFF },
   // Attendance, Payroll, Roles now in Employees dropdown
   { label: 'Settings', href: '/dashboard/settings', permission: PERMISSIONS.MANAGE_SETTINGS },
