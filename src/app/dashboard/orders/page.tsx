@@ -27,10 +27,9 @@ type Order = {
   payment_status: string;
   created_at: string;
   items_count?: number;
-  scheduled_time?: string | null; // add this line
+  scheduled_time?: string | null;
 };
 
-// Customize stagger timing here.
 const orderGridVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -39,7 +38,6 @@ const orderGridVariants = {
   },
 };
 
-// Customize card entrance animation here.
 const orderCardVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: {
@@ -68,7 +66,11 @@ export default function OrdersPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSummary, setOrderSummary] = useState({ active: 0, completed: 0 });
 
-  // Gunakan useAuth yang sudah ada
+  // Search & filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
   const { user, isLoading: authLoading } = useAuth();
   const ownerId = getOwnerId(user);
   const router = useRouter();
@@ -85,7 +87,6 @@ export default function OrdersPage() {
     setLoading(true);
 
     try {
-      // Fetch orders
       let query = supabase
         .from('orders')
         .select(`
@@ -103,7 +104,6 @@ export default function OrdersPage() {
         setOrders([]);
         setOrderSummary({ active: 0, completed: 0 });
       } else {
-        // Format orders dengan benar
         const formattedOrders = (ordersData || []).map(order => ({
           ...order,
           table_number: order.restaurant_tables?.table_number || null,
@@ -115,20 +115,14 @@ export default function OrdersPage() {
         setOrderSummary(summarizeOrderTabs(formattedOrders));
       }
 
-      // Fetch tables
       const { data: tablesData, error: tablesError } = await supabase
         .from('restaurant_tables')
         .select('*')
         .eq('user_id', ownerId)
         .order('table_number');
 
-      if (tablesError) {
-        console.error('Error fetching tables:', tablesError);
-      } else {
-        setTables(tablesData || []);
-      }
+      if (!tablesError) setTables(tablesData || []);
 
-      // Fetch menu items
       const { data: menuData, error: menuError } = await supabase
         .from('menu_items')
         .select('*')
@@ -136,9 +130,7 @@ export default function OrdersPage() {
         .eq('is_available', true)
         .order('name');
 
-      if (menuError) {
-        console.error('Error fetching menu items:', menuError);
-      } else {
+      if (!menuError) {
         const menuIds = (menuData || []).map((item) => item.id);
         let recipeData: any[] = [];
 
@@ -147,14 +139,12 @@ export default function OrdersPage() {
             .from('menu_item_ingredients')
             .select('menu_item_id, quantity, inventory(name, current_stock)')
             .in('menu_item_id', menuIds);
-
           recipeData = data || [];
         }
 
         setMenuItems(applyIngredientAvailability(menuData || [], recipeData));
       }
 
-      // Fetch menu categories
       const { data: catData, error: catError } = await supabase
         .from('menu_categories')
         .select('*')
@@ -162,13 +152,8 @@ export default function OrdersPage() {
         .eq('is_active', true)
         .order('display_order');
 
-      if (catError) {
-        console.error('Error fetching menu categories:', catError);
-      } else {
-        setCategories(catData || []);
-      }
+      if (!catError) setCategories(catData || []);
 
-      // Fetch settings
       const { data: settingsData } = await supabase
         .from('restaurant_settings')
         .select('*')
@@ -185,12 +170,9 @@ export default function OrdersPage() {
 
   const createOrder = async (orderData: any) => {
     if (!ownerId || !user) return;
-
-    // Prevent duplicate submission
     if (isSubmitting) return;
     setIsSubmitting(true);
 
-    // --- ENFORCE TRANSACTION LIMIT ---
     let tier = user.subscription_tier || 'basic';
     if (tier === 'free') tier = 'basic';
     if (tier === 'basic') {
@@ -212,20 +194,12 @@ export default function OrdersPage() {
         return;
       }
     }
-    // ---------------------------------
 
-    // Extract items and the rest of the order fields from the parameter
     const { items, ...orderFields } = orderData;
 
-    // Check table conflict for dine‑in
     if (orderFields.order_type === 'dine_in' && orderFields.table_id && orderFields.scheduled_time) {
-      // Convert local datetime (YYYY-MM-DDTHH:mm) to UTC ISO string
       const scheduledTimeUTC = new Date(orderFields.scheduled_time).toISOString();
-      const hasConflict = await checkTableConflict(
-        ownerId,
-        orderFields.table_id,
-        scheduledTimeUTC
-      );
+      const hasConflict = await checkTableConflict(ownerId, orderFields.table_id, scheduledTimeUTC);
       if (hasConflict) {
         alert('Meja yang dipilih sudah dipesan pada waktu tersebut. Silakan pilih waktu lain atau meja lain.');
         setIsSubmitting(false);
@@ -233,13 +207,9 @@ export default function OrdersPage() {
       }
     }
 
-    // Generate unique order number
     const orderNumber = `ORD-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-
-    // Calculate financials
     const subtotal = items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
 
-    // Fetch tax, service charge, and delivery fee from restaurant settings
     const { data: settingsData } = await supabase
       .from('restaurant_settings')
       .select('tax_percentage, service_charge_percentage, delivery_fee')
@@ -254,11 +224,10 @@ export default function OrdersPage() {
     const serviceChargeAmount = subtotal * (serviceChargePercentage / 100);
     const totalAmount = subtotal + taxAmount + serviceChargeAmount + deliveryFee;
 
-    // Insert the order
     const { data: newOrder, error } = await supabase
       .from('orders')
       .insert({
-        ...orderFields,               // contains table_id, customer_name, scheduled_time, etc.
+        ...orderFields,
         order_number: orderNumber,
         user_id: ownerId,
         status: 'pending',
@@ -283,7 +252,6 @@ export default function OrdersPage() {
       return;
     }
 
-    // Insert order items
     const orderItems = items.map((item: any) => ({
       order_id: newOrder.id,
       menu_item_id: item.id,
@@ -295,7 +263,6 @@ export default function OrdersPage() {
 
     await supabase.from('order_items').insert(orderItems);
 
-    // Send email notification to owner
     if (user?.email) {
       await sendOrderEmail({
         email: user.email,
@@ -306,20 +273,14 @@ export default function OrdersPage() {
       });
     }
 
-    // Refresh data and close modal
     await fetchData();
     setShowOrderModal(false);
     setIsSubmitting(false);
   };
 
   const completeOrder = async (orderId: string) => {
-    // Refresh data first (optional: await if you want to ensure fresh data before alert)
     await fetchData();
-
-    // Show popup message
     alert('✅ Transaksi selesai');
-
-    // Close the invoice modal after user acknowledges the popup
     setShowInvoiceModal(false);
   };
 
@@ -329,32 +290,25 @@ export default function OrdersPage() {
     }
 
     try {
-      // First delete related order_items (foreign key constraint)
       const { error: itemsError } = await supabase
         .from('order_items')
         .delete()
         .eq('order_id', orderId);
-
       if (itemsError) throw itemsError;
 
-      // Delete related transactions so stale Pengeluaran from inventory doesn't remain.
       const { error: transactionsError } = await supabase
         .from('transactions')
         .delete()
         .eq('order_id', orderId)
         .eq('user_id', ownerId);
-
       if (transactionsError) throw transactionsError;
 
-      // Then delete the order itself
       const { error: orderError } = await supabase
         .from('orders')
         .delete()
         .eq('id', orderId);
-
       if (orderError) throw orderError;
 
-      // Refresh data
       await fetchData();
       alert(`Order ${orderNumber} berhasil dibatalkan.`);
     } catch (error: any) {
@@ -363,7 +317,38 @@ export default function OrdersPage() {
     }
   };
 
-  // Tampilkan loading jika auth masih loading
+  const resetFilters = () => {
+    setSearchTerm('');
+    setDateFrom('');
+    setDateTo('');
+  };
+
+  // Filter orders based on active tab, search term, and date range
+  const filteredByTab = filterOrdersByTab(orders, activeTab);
+  const filteredOrders = filteredByTab.filter(order => {
+    // Search by order number or customer name
+    if (searchTerm.trim() !== '') {
+      const term = searchTerm.toLowerCase();
+      const matchesOrderNumber = order.order_number.toLowerCase().includes(term);
+      const matchesCustomer = order.customer_name?.toLowerCase().includes(term) || false;
+      if (!matchesOrderNumber && !matchesCustomer) return false;
+    }
+
+    // Date from filter
+    if (dateFrom) {
+      const orderDate = new Date(order.created_at).toISOString().slice(0, 10);
+      if (orderDate < dateFrom) return false;
+    }
+
+    // Date to filter
+    if (dateTo) {
+      const orderDate = new Date(order.created_at).toISOString().slice(0, 10);
+      if (orderDate > dateTo) return false;
+    }
+
+    return true;
+  });
+
   if (authLoading || loading) {
     return (
       <div className="py-4 sm:py-6">
@@ -375,11 +360,6 @@ export default function OrdersPage() {
     );
   }
 
-  const displayedOrders = filterOrdersByTab(orders, activeTab);
-  // Update "new order" time window here (minutes).
-  const NEW_ORDER_MINUTES = 12;
-
-  // Tampilkan pesan jika tidak ada user (belum login)
   if (!user) {
     return (
       <div className="py-4 sm:py-6">
@@ -390,6 +370,8 @@ export default function OrdersPage() {
       </div>
     );
   }
+
+  const NEW_ORDER_MINUTES = 12;
 
   return (
     <div className="py-4 sm:py-6">
@@ -431,23 +413,71 @@ export default function OrdersPage() {
             </button>
           </nav>
         </div>
+
+        {/* Search & Filter Bar */}
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between border-t border-slate-100 pt-5">
+          <div className="flex flex-1 flex-col sm:flex-row gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-slate-500 mb-1">Cari Order / Pelanggan</label>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="No. Order atau nama pelanggan..."
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div className="w-full sm:w-40">
+              <label className="block text-xs font-medium text-slate-500 mb-1">Dari Tanggal</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div className="w-full sm:w-40">
+              <label className="block text-xs font-medium text-slate-500 mb-1">Sampai Tanggal</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          </div>
+          {(searchTerm || dateFrom || dateTo) && (
+            <button
+              onClick={resetFilters}
+              className="text-sm text-primary hover:text-primary/80 font-medium px-3 py-2 rounded-lg border border-primary/20 hover:bg-primary/5 transition-colors"
+            >
+              Reset Filter
+            </button>
+          )}
+        </div>
       </div>
 
-      {displayedOrders.length === 0 ? (
+      {filteredOrders.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 shadow-sm">
           <div className="text-4xl mb-4">📦</div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Belum ada order</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            {searchTerm || dateFrom || dateTo ? 'Tidak ada order yang cocok' : 'Belum ada order'}
+          </h3>
           <p className="text-gray-600 mb-6">
-            {activeTab === 'pending'
-              ? 'Tidak ada order yang sedang aktif'
-              : 'Belum ada riwayat order yang selesai'}
+            {searchTerm || dateFrom || dateTo
+              ? 'Coba ubah kata kunci atau rentang tanggal filter.'
+              : activeTab === 'pending'
+                ? 'Tidak ada order yang sedang aktif'
+                : 'Belum ada riwayat order yang selesai'}
           </p>
-          <button
-            onClick={() => setShowOrderModal(true)}
-            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-          >
-            + Buat Order Pertama
-          </button>
+          {!searchTerm && !dateFrom && !dateTo && (
+            <button
+              onClick={() => setShowOrderModal(true)}
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+            >
+              + Buat Order Pertama
+            </button>
+          )}
         </div>
       ) : (
         <LayoutGroup>
@@ -458,99 +488,98 @@ export default function OrdersPage() {
             animate="visible"
           >
             <AnimatePresence mode="popLayout">
-              {displayedOrders.map((order) => {
+              {filteredOrders.map((order) => {
                 const isNewOrder = order.status === 'pending'
                   && (Date.now() - new Date(order.created_at).getTime()) < NEW_ORDER_MINUTES * 60 * 1000;
 
                 return (
-            <motion.div
-              key={order.id}
-              layout
-              variants={orderCardVariants}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              transition={{ layout: { duration: 0.32, ease: 'easeInOut' } }}
-              className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
-            >
-              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-blue-500/70 to-indigo-500/80" />
-              {/* Tune glow style for new orders here. */}
-              {isNewOrder && (
-                <>
-                  <div className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-amber-300/70 animate-pulse" />
-                  <span className="absolute top-3 right-3 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
-                    Baru
-                  </span>
-                </>
-              )}
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="font-bold text-base sm:text-lg text-slate-900">{order.order_number}</h3>
-                  <p className="text-sm text-slate-600">
-                    {order.table_number ? `Meja ${order.table_number}` :
-                      order.order_type === 'takeaway' ? 'Takeaway' : 'Delivery'}
-                  </p>
-                </div>
-                <span
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-full ${order.status === 'pending'
-                    ? 'bg-amber-100 text-amber-800'
-                    : order.status === 'completed'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-slate-100 text-slate-700'
-                    }`}
-                >
-                  {order.status === 'pending' ? 'Pending' : order.status === 'completed' ? 'Selesai' : order.status}
-                </span>
-              </div>
-
-              <div className="mb-4">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                    {order.order_type === 'dine_in' ? 'Dine In' : order.order_type === 'takeaway' ? 'Takeaway' : 'Delivery'}
-                  </span>
-                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                    {order.items_count || 0} items
-                  </span>
-                </div>
-                <p className="text-sm text-slate-600">
-                  Customer: <span className="font-medium text-slate-800">{order.customer_name || 'Tanpa nama'}</span>
-                </p>
-                <p className="text-sm font-semibold text-slate-900 mt-1">
-                  Total: Rp {order.total_amount.toLocaleString()}
-                </p>
-                <p className="text-sm text-slate-600 mt-1">
-                  Tanggal: {new Date(order.created_at).toLocaleDateString('id-ID')}
-                </p>
-                {order.order_type === 'dine_in' && order.scheduled_time && (
-                  <p className="text-sm text-slate-600 mt-1">
-                    Waktu reservasi: {new Date(order.scheduled_time).toLocaleString('id-ID')}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    setSelectedOrder(order);
-                    setShowInvoiceModal(true);
-                  }}
-                  className="flex-1 px-3 py-2.5 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 font-medium"
-                >
-                  Lihat Detail
-                </button>
-                {order.status !== 'completed' && (
-                  <button
-                    onClick={() => deleteOrder(order.id, order.order_number)}
-                    className="px-3 py-2.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700"
-                    title="Batalkan dan hapus order"
+                  <motion.div
+                    key={order.id}
+                    layout
+                    variants={orderCardVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    transition={{ layout: { duration: 0.32, ease: 'easeInOut' } }}
+                    className="group relative overflow-hidden bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                </button>
-                )}
-              </div>
-            </motion.div>
+                    <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/80 via-blue-500/70 to-indigo-500/80" />
+                    {isNewOrder && (
+                      <>
+                        <div className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-amber-300/70 animate-pulse" />
+                        <span className="absolute top-3 right-3 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                          Baru
+                        </span>
+                      </>
+                    )}
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="font-bold text-base sm:text-lg text-slate-900">{order.order_number}</h3>
+                        <p className="text-sm text-slate-600">
+                          {order.table_number ? `Meja ${order.table_number}` :
+                            order.order_type === 'takeaway' ? 'Takeaway' : 'Delivery'}
+                        </p>
+                      </div>
+                      <span
+                        className={`px-2.5 py-1 text-xs font-semibold rounded-full ${order.status === 'pending'
+                          ? 'bg-amber-100 text-amber-800'
+                          : order.status === 'completed'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-slate-100 text-slate-700'
+                          }`}
+                      >
+                        {order.status === 'pending' ? 'Pending' : order.status === 'completed' ? 'Selesai' : order.status}
+                      </span>
+                    </div>
+
+                    <div className="mb-4">
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                          {order.order_type === 'dine_in' ? 'Dine In' : order.order_type === 'takeaway' ? 'Takeaway' : 'Delivery'}
+                        </span>
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                          {order.items_count || 0} items
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-600">
+                        Customer: <span className="font-medium text-slate-800">{order.customer_name || 'Tanpa nama'}</span>
+                      </p>
+                      <p className="text-sm font-semibold text-slate-900 mt-1">
+                        Total: Rp {order.total_amount.toLocaleString()}
+                      </p>
+                      <p className="text-sm text-slate-600 mt-1">
+                        Tanggal: {new Date(order.created_at).toLocaleDateString('id-ID')}
+                      </p>
+                      {order.order_type === 'dine_in' && order.scheduled_time && (
+                        <p className="text-sm text-slate-600 mt-1">
+                          Waktu reservasi: {new Date(order.scheduled_time).toLocaleString('id-ID')}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedOrder(order);
+                          setShowInvoiceModal(true);
+                        }}
+                        className="flex-1 px-3 py-2.5 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 font-medium"
+                      >
+                        Lihat Detail
+                      </button>
+                      {order.status !== 'completed' && (
+                        <button
+                          onClick={() => deleteOrder(order.id, order.order_number)}
+                          className="px-3 py-2.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700"
+                          title="Batalkan dan hapus order"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
                 );
               })}
             </AnimatePresence>

@@ -2,11 +2,12 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { AnimatePresence, motion } from 'framer-motion';
+import { MagnifyingGlassIcon, XMarkIcon, FunnelIcon } from '@heroicons/react/24/outline';
 
 type Employee = {
   id: string;
@@ -28,7 +29,6 @@ type CustomRole = {
   name: string;
 };
 
-// Legacy roles for backward compatibility
 const legacyRoles = [
   { value: 'admin', label: 'Admin' },
   { value: 'cashier', label: 'Kasir' },
@@ -45,6 +45,11 @@ export default function EmployeesPage() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [useCustomRole, setUseCustomRole] = useState(false);
   const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
+
+  // Search & filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [roleFilter, setRoleFilter] = useState<string>('all');
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -113,7 +118,6 @@ export default function EmployeesPage() {
     setShowForm(true);
   };
 
-  // Generate random 4-digit PIN
   const generatePIN = () => {
     return Math.floor(1000 + Math.random() * 9000).toString();
   };
@@ -139,17 +143,14 @@ export default function EmployeesPage() {
     if (!user?.id) return;
 
     try {
-      // Prepare data
       const submitData: any = {
         full_name: formData.full_name,
         email: formData.email,
         phone: formData.phone,
       };
 
-      // Set role based on selection
       if (useCustomRole && formData.role_id) {
         submitData.role_id = formData.role_id;
-        // Keep legacy role for backward compatibility
         submitData.role = 'admin';
       } else {
         submitData.role = formData.role;
@@ -157,34 +158,19 @@ export default function EmployeesPage() {
       }
 
       if (editingEmployee) {
-        // --- MODE EDIT ---
-        // Siapkan data update
-        const updateData: any = {
-          full_name: formData.full_name,
-          email: formData.email,
-          phone: formData.phone,
-          role: formData.role,
-          daily_rate: formData.daily_rate ? parseFloat(formData.daily_rate) : null,
-          monthly_salary: formData.monthly_salary ? parseFloat(formData.monthly_salary) : null,
-        };
-
         const { error } = await supabase
           .from('employees')
           .update(submitData)
           .eq('id', editingEmployee.id);
-
         if (error) throw error;
-
         alert('Data karyawan berhasil diperbarui');
       } else {
-        // --- ENFORCE STAFF LOCATION LIMITS ---
         let tier = user.subscription_tier || 'basic';
         if (tier === 'free') tier = 'basic';
-        let maxStaff = 1; // basic
+        let maxStaff = 1;
         if (tier === 'pro') maxStaff = 3;
         if (tier === 'enterprise') maxStaff = 10;
 
-        // Query active staff
         const { count, error: countError } = await supabase
           .from('employees')
           .select('*', { count: 'exact', head: true })
@@ -197,17 +183,14 @@ export default function EmployeesPage() {
           }
           return;
         }
-        // -------------------------------------
 
         const employeeCode = `EMP${Date.now().toString().slice(-6)}`;
         submitData.employee_code = employeeCode;
         submitData.user_id = user.id;
         submitData.created_by = user.id;
-        // Add PIN code (required for new employees)
         submitData.pin_code = formData.pin_code || generatePIN();
 
         const { error } = await supabase.from('employees').insert(submitData);
-
         if (error) throw error;
         alert('Karyawan berhasil ditambahkan');
       }
@@ -230,7 +213,6 @@ export default function EmployeesPage() {
       .from('employees')
       .update({ is_active: !currentStatus })
       .eq('id', id);
-
     if (!error) {
       fetchEmployees();
     } else {
@@ -246,6 +228,62 @@ export default function EmployeesPage() {
     }
     return legacyRoles.find(r => r.value === employee.role)?.label || employee.role;
   };
+
+  // Build role filter options (legacy + custom)
+  const roleFilterOptions = useMemo(() => {
+    const options = [{ value: 'all', label: 'Semua Role' }];
+    legacyRoles.forEach(role => {
+      options.push({ value: role.value, label: role.label });
+    });
+    customRoles.forEach(role => {
+      options.push({ value: role.id, label: role.name });
+    });
+    return options;
+  }, [customRoles]);
+
+  // Filter employees
+  const filteredEmployees = useMemo(() => {
+    let filtered = [...employees];
+
+    // Search term (name, code, email, phone)
+    if (searchTerm.trim() !== '') {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(emp =>
+        emp.full_name.toLowerCase().includes(term) ||
+        emp.employee_code.toLowerCase().includes(term) ||
+        (emp.email && emp.email.toLowerCase().includes(term)) ||
+        (emp.phone && emp.phone.toLowerCase().includes(term))
+      );
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(emp =>
+        statusFilter === 'active' ? emp.is_active : !emp.is_active
+      );
+    }
+
+    // Role filter (supports both legacy role value and custom role id)
+    if (roleFilter !== 'all') {
+      filtered = filtered.filter(emp => {
+        if (emp.role_id) {
+          return emp.role_id === roleFilter;
+        } else {
+          return emp.role === roleFilter;
+        }
+      });
+    }
+
+    return filtered;
+  }, [employees, searchTerm, statusFilter, roleFilter]);
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setRoleFilter('all');
+  };
+
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all' || roleFilter !== 'all';
 
   if (authLoading || loading) {
     return (
@@ -293,6 +331,56 @@ export default function EmployeesPage() {
         </div>
       </div>
 
+      {/* Search & Filter Bar */}
+      <div className="mb-6 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 relative">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Cari karyawan (nama, kode, email, telepon)..."
+              className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div className="flex gap-2">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="all">Semua Status</option>
+              <option value="active">Aktif</option>
+              <option value="inactive">Nonaktif</option>
+            </select>
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              {roleFilterOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            {hasActiveFilters && (
+              <button
+                onClick={resetFilters}
+                className="inline-flex items-center px-3 py-2 text-sm text-primary hover:bg-primary/10 rounded-lg border border-primary/20"
+              >
+                <XMarkIcon className="w-4 h-4 mr-1" />
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
+        {hasActiveFilters && (
+          <div className="mt-2 text-xs text-gray-500">
+            Menampilkan {filteredEmployees.length} dari {employees.length} karyawan
+          </div>
+        )}
+      </div>
+
       {/* Form Modal */}
       {showForm && (
         <div className="mb-8 p-6 bg-white rounded-lg shadow border-l-4 border-primary">
@@ -336,7 +424,6 @@ export default function EmployeesPage() {
                 />
               </div>
 
-              {/* PIN Code - Required for new employees */}
               {!editingEmployee && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
@@ -368,13 +455,10 @@ export default function EmployeesPage() {
                 </div>
               )}
 
-              {/* Role Selection */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Role *
                 </label>
-
-                {/* Toggle between Legacy and Custom Role */}
                 <div className="flex items-center space-x-4 mb-3">
                   <label className="flex items-center">
                     <input
@@ -399,7 +483,6 @@ export default function EmployeesPage() {
                   </label>
                 </div>
 
-                {/* Legacy Role Select */}
                 {!useCustomRole && (
                   <select
                     value={formData.role}
@@ -412,7 +495,6 @@ export default function EmployeesPage() {
                   </select>
                 )}
 
-                {/* Custom Role Select */}
                 {useCustomRole && (
                   <select
                     value={formData.role_id}
@@ -436,7 +518,6 @@ export default function EmployeesPage() {
                   </p>
                 )}
               </div>
-
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
@@ -486,102 +567,118 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-        {employees.map((employee, index) => {
-          const initials = employee.full_name
-            .split(' ')
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((n) => n[0]?.toUpperCase())
-            .join('');
-          const expanded = expandedEmployeeId === employee.id;
-
-          return (
-            <motion.div
-              key={employee.id}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.32, delay: index * 0.04 }}
-              // Adjust hover tilt/scale style here.
-              whileHover={{ scale: 1.02, rotateX: 1, rotateY: -1 }}
-              className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/85 backdrop-blur-sm p-5 shadow-sm hover:shadow-[0_16px_45px_-20px_rgba(37,99,235,0.55)]"
-              style={{ transformStyle: 'preserve-3d' }}
+      {/* Employee Cards */}
+      {filteredEmployees.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-xl shadow-sm">
+          <div className="text-4xl mb-3">👥</div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-1">
+            {hasActiveFilters ? 'Tidak ada karyawan yang cocok' : 'Belum ada karyawan'}
+          </h3>
+          <p className="text-gray-500">
+            {hasActiveFilters
+              ? 'Coba ubah kata kunci atau filter.'
+              : 'Klik "+ Tambah Karyawan" untuk memulai.'}
+          </p>
+          {hasActiveFilters && (
+            <button
+              onClick={resetFilters}
+              className="mt-4 text-primary hover:underline text-sm"
             >
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/45 via-transparent to-primary/10" />
-              <div className="relative">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary to-blue-500 text-white flex items-center justify-center font-semibold shadow-md">
-                      {/* Replace with your avatar placeholder image if needed. */}
-                      {initials || 'EM'}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-900">{employee.full_name}</h3>
-                      <p className="text-xs text-slate-500 font-mono">{employee.employee_code}</p>
-                    </div>
-                  </div>
-                  <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${employee.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}>
-                    {employee.is_active ? 'Aktif' : 'Nonaktif'}
-                  </span>
-                </div>
+              Reset filter
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filteredEmployees.map((employee, index) => {
+            const initials = employee.full_name
+              .split(' ')
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((n) => n[0]?.toUpperCase())
+              .join('');
+            const expanded = expandedEmployeeId === employee.id;
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${employee.role_id ? 'bg-purple-100 text-purple-800' : 'bg-primary/10 text-primary'}`}>
-                    {getRoleLabel(employee)}{employee.role_id && ' (Custom)'}
-                  </span>
-                  <span className="px-2.5 py-1 text-xs rounded-full bg-slate-100 text-slate-600 font-mono">
-                    PIN: {employee.pin_code || 'N/A'}
-                  </span>
-                </div>
-
-                <div className="mt-4 flex items-center gap-2">
-                  <button
-                    onClick={() => setExpandedEmployeeId(expanded ? null : employee.id)}
-                    className="px-3 py-2 text-xs font-medium bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200"
-                  >
-                    {expanded ? 'Sembunyikan Detail' : 'Lihat Detail'}
-                  </button>
-                  <button
-                    onClick={() => toggleEmployeeStatus(employee.id, employee.is_active)}
-                    className={`px-3 py-2 text-xs font-medium rounded-lg ${employee.is_active ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
-                  >
-                    {employee.is_active ? 'Nonaktifkan' : 'Aktifkan'}
-                  </button>
-                  <button
-                    onClick={() => handleEdit(employee)}
-                    className="px-3 py-2 text-xs font-medium bg-primary/10 text-primary rounded-lg hover:bg-primary/20"
-                  >
-                    Edit
-                  </button>
-                </div>
-
-                <AnimatePresence initial={false}>
-                  {expanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.28, ease: 'easeOut' }}
-                      className="overflow-hidden"
-                    >
-                      <div className="mt-4 border-t pt-4 text-sm text-slate-600 space-y-1">
-                        <p>Email: {employee.email || '-'}</p>
-                        <p>Telepon: {employee.phone || '-'}</p>
-                        <p>Gaji Bulanan: {employee.monthly_salary ? `Rp ${employee.monthly_salary.toLocaleString('id-ID')}` : '-'}</p>
-                        <p>Rate Harian: {employee.daily_rate ? `Rp ${employee.daily_rate.toLocaleString('id-ID')}` : '-'}</p>
-                        <p>Bergabung: {new Date(employee.created_at).toLocaleDateString('id-ID')}</p>
+            return (
+              <motion.div
+                key={employee.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.32, delay: index * 0.04 }}
+                whileHover={{ scale: 1.02, rotateX: 1, rotateY: -1 }}
+                className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/85 backdrop-blur-sm p-5 shadow-sm hover:shadow-[0_16px_45px_-20px_rgba(37,99,235,0.55)]"
+                style={{ transformStyle: 'preserve-3d' }}
+              >
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/45 via-transparent to-primary/10" />
+                <div className="relative">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary to-blue-500 text-white flex items-center justify-center font-semibold shadow-md">
+                        {initials || 'EM'}
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-      {employees.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          Belum ada karyawan. Klik "+ Tambah Karyawan" untuk memulai.
+                      <div>
+                        <h3 className="font-semibold text-slate-900">{employee.full_name}</h3>
+                        <p className="text-xs text-slate-500 font-mono">{employee.employee_code}</p>
+                      </div>
+                    </div>
+                    <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${employee.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}>
+                      {employee.is_active ? 'Aktif' : 'Nonaktif'}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${employee.role_id ? 'bg-purple-100 text-purple-800' : 'bg-primary/10 text-primary'}`}>
+                      {getRoleLabel(employee)}{employee.role_id && ' (Custom)'}
+                    </span>
+                    <span className="px-2.5 py-1 text-xs rounded-full bg-slate-100 text-slate-600 font-mono">
+                      PIN: {employee.pin_code || 'N/A'}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-2">
+                    <button
+                      onClick={() => setExpandedEmployeeId(expanded ? null : employee.id)}
+                      className="px-3 py-2 text-xs font-medium bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200"
+                    >
+                      {expanded ? 'Sembunyikan Detail' : 'Lihat Detail'}
+                    </button>
+                    <button
+                      onClick={() => toggleEmployeeStatus(employee.id, employee.is_active)}
+                      className={`px-3 py-2 text-xs font-medium rounded-lg ${employee.is_active ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+                    >
+                      {employee.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                    </button>
+                    <button
+                      onClick={() => handleEdit(employee)}
+                      className="px-3 py-2 text-xs font-medium bg-primary/10 text-primary rounded-lg hover:bg-primary/20"
+                    >
+                      Edit
+                    </button>
+                  </div>
+
+                  <AnimatePresence initial={false}>
+                    {expanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.28, ease: 'easeOut' }}
+                        className="overflow-hidden"
+                      >
+                        <div className="mt-4 border-t pt-4 text-sm text-slate-600 space-y-1">
+                          <p>Email: {employee.email || '-'}</p>
+                          <p>Telepon: {employee.phone || '-'}</p>
+                          <p>Gaji Bulanan: {employee.monthly_salary ? `Rp ${employee.monthly_salary.toLocaleString('id-ID')}` : '-'}</p>
+                          <p>Rate Harian: {employee.daily_rate ? `Rp ${employee.daily_rate.toLocaleString('id-ID')}` : '-'}</p>
+                          <p>Bergabung: {new Date(employee.created_at).toLocaleDateString('id-ID')}</p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>

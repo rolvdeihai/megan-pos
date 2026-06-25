@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { PlusIcon, PencilIcon, TrashIcon, QrCodeIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, QrCodeIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import QRCode from 'react-qr-code';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { getOwnerId } from '@/lib/user-scope';
@@ -39,6 +39,10 @@ export default function TablesPage() {
     table_name: '',
     capacity: 4,
   });
+
+  // Search & filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'occupied' | 'reserved'>('all');
 
   // Delete confirmation modal states
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -103,7 +107,6 @@ export default function TablesPage() {
     
     try {
       if (editingTable) {
-        // Update existing table
         const { error } = await supabase
           .from('restaurant_tables')
           .update({
@@ -117,7 +120,6 @@ export default function TablesPage() {
 
         if (error) throw error;
       } else {
-        // Create new table
         const { error } = await supabase.from('restaurant_tables').insert({
           ...formData,
           user_id: ownerId,
@@ -155,7 +157,6 @@ export default function TablesPage() {
     setShowForm(true);
   };
 
-  // Check if table has related orders before showing delete modal
   const initiateDelete = async (table: Table) => {
     if (!ownerId) return;
     
@@ -163,7 +164,6 @@ export default function TablesPage() {
     setCheckingOrders(true);
     setShowDeleteModal(true);
 
-    // Fetch related orders
     const { data: orders } = await supabase
       .from('orders')
       .select('id, order_number, status, customer_name, total_amount, created_at')
@@ -175,7 +175,6 @@ export default function TablesPage() {
     setCheckingOrders(false);
   };
 
-  // Simple delete for tables without orders
   const deleteTableSimple = async (id: string) => {
     if (!ownerId) return;
     
@@ -196,7 +195,6 @@ export default function TablesPage() {
     }
   };
 
-  // Force delete: set order table_id to null then delete table
   const forceDeleteTable = async () => {
     if (!ownerId || !deletingTable) return;
 
@@ -209,7 +207,6 @@ export default function TablesPage() {
     if (!confirmed) return;
 
     try {
-      // Step 1: Set table_id to null for all related orders
       const { error: updateError } = await supabase
         .from('orders')
         .update({ table_id: null })
@@ -218,7 +215,6 @@ export default function TablesPage() {
 
       if (updateError) throw updateError;
 
-      // Step 2: Delete the table
       const { error: deleteError } = await supabase
         .from('restaurant_tables')
         .delete()
@@ -237,10 +233,6 @@ export default function TablesPage() {
       alert('Gagal menghapus meja: ' + (error.message || 'Unknown error'));
     }
   };
-
-  // Note: Opsi "Hapus Semua Order & Meja" dihapus karena order yang sudah complete
-  // memiliki transaksi di tabel transactions. Menghapus data historis transaksi
-  // sangat berbahaya untuk laporan keuangan. Gunakan opsi "Lepaskan Order" saja.
 
   const toggleAvailability = async (table: Table) => {
     if (!ownerId) return;
@@ -268,7 +260,6 @@ export default function TablesPage() {
       const baseUrl = window.location.origin;
       const qrUrl = `${baseUrl}/${user.restaurant_slug}?table=${tableNumber}`;
       
-      // Update QR URL ke database
       await supabase
         .from('restaurant_tables')
         .update({ qr_code: qrUrl })
@@ -309,13 +300,35 @@ export default function TablesPage() {
     img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
   };
 
+  const resetFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+  };
+
+  // Build table availability and apply search + status filter
   const tableCards = useMemo(() => {
     const availability = buildTableAvailability(tables, tableOrders, currentSlotTime);
-    return availability.map((table) => ({
+    let cards = availability.map((table) => ({
       ...table,
       visual_status: getTableVisualStatus(table),
     }));
-  }, [tables, tableOrders, currentSlotTime]);
+
+    // Filter by search term (table number or table name)
+    if (searchTerm.trim() !== '') {
+      const term = searchTerm.toLowerCase();
+      cards = cards.filter(table => 
+        table.table_number.toLowerCase().includes(term) ||
+        (table.table_name && table.table_name.toLowerCase().includes(term))
+      );
+    }
+
+    // Filter by status
+    if (statusFilter !== 'all') {
+      cards = cards.filter(table => table.visual_status === statusFilter);
+    }
+
+    return cards;
+  }, [tables, tableOrders, currentSlotTime, searchTerm, statusFilter]);
 
   if (!user) {
     return (
@@ -370,6 +383,42 @@ export default function TablesPage() {
           <PlusIcon className="w-5 h-5 mr-2" />
           Tambah Meja
         </button>
+      </div>
+
+      {/* Search & Filter Bar */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-4 bg-white rounded-xl p-4 shadow-sm border border-slate-200">
+        <div className="flex-1 relative">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Cari meja (nomor atau nama)..."
+            className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        <div className="flex gap-2 items-center">
+          <span className="text-sm text-slate-500 hidden sm:inline">Status:</span>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            <option value="all">Semua Status</option>
+            <option value="available">Tersedia</option>
+            <option value="occupied">Terisi</option>
+            <option value="reserved">Reservasi</option>
+          </select>
+          {(searchTerm || statusFilter !== 'all') && (
+            <button
+              onClick={resetFilters}
+              className="p-2 text-primary hover:bg-primary/10 rounded-lg"
+              title="Reset filter"
+            >
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {showForm && (
@@ -446,18 +495,25 @@ export default function TablesPage() {
       {tableCards.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl shadow">
           <div className="text-4xl mb-4">🪑</div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Belum ada meja</h3>
-          <p className="text-gray-600 mb-6">Mulai dengan menambahkan meja pertama Anda</p>
-          <button
-            onClick={() => setShowForm(true)}
-            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-          >
-            + Tambah Meja Pertama
-          </button>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            {searchTerm || statusFilter !== 'all' ? 'Tidak ada meja yang cocok' : 'Belum ada meja'}
+          </h3>
+          <p className="text-gray-600 mb-6">
+            {searchTerm || statusFilter !== 'all'
+              ? 'Coba ubah kata kunci atau filter status.'
+              : 'Mulai dengan menambahkan meja pertama Anda'}
+          </p>
+          {!searchTerm && statusFilter === 'all' && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+            >
+              + Tambah Meja Pertama
+            </button>
+          )}
         </div>
       ) : (
         <LayoutGroup>
-          {/* Update table grid columns here. */}
           <motion.div
             layout
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
@@ -482,7 +538,6 @@ export default function TablesPage() {
                     transition={
                       isAvailable
                         ? {
-                            // Tune floating animation rhythm here.
                             y: { repeat: Infinity, duration: 4, ease: 'easeInOut' },
                             opacity: { duration: 0.2 },
                             scale: { duration: 0.2 },
@@ -492,7 +547,6 @@ export default function TablesPage() {
                     }
                     whileTap={{
                       scale: 0.9,
-                      // Tune tap spring feel here.
                       transition: { type: 'spring', stiffness: 400, damping: 10 },
                     }}
                     onClick={() => setSelectedTableId(table.id)}
@@ -502,12 +556,10 @@ export default function TablesPage() {
                         : 'border-slate-200 hover:shadow-2xl'
                     }`}
                   >
-                    {/* Occupied ring effect */}
                     {isOccupied && (
                       <div className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-red-300/70 animate-pulse" />
                     )}
 
-                    {/* Reserved shimmering gradient border */}
                     {isReserved && (
                       <motion.div
                         className="pointer-events-none absolute inset-0 rounded-2xl p-[1.5px]"
@@ -516,7 +568,6 @@ export default function TablesPage() {
                             'linear-gradient(120deg, rgba(99,102,241,0.75), rgba(56,189,248,0.75), rgba(167,139,250,0.75), rgba(99,102,241,0.75))',
                           backgroundSize: '220% 220%',
                         }}
-                        // Adjust shimmer speed/colors here.
                         animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
                         transition={{ duration: 3.2, repeat: Infinity, ease: 'linear' }}
                       />
@@ -618,7 +669,7 @@ export default function TablesPage() {
         </LayoutGroup>
       )}
 
-      {/* QR Code Modal */}
+      {/* QR Code Modal (unchanged) */}
       {showQR && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
@@ -676,7 +727,7 @@ export default function TablesPage() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal (unchanged) */}
       {showDeleteModal && deletingTable && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -750,7 +801,6 @@ export default function TablesPage() {
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-gray-700">Pilihan tindakan:</p>
                   
-                  {/* Option 1: Archive table (set inactive) */}
                   <button
                     onClick={() => {
                       toggleAvailability(deletingTable);
@@ -765,7 +815,6 @@ export default function TablesPage() {
                     <div className="text-sm text-gray-600">Meja tetap ada tapi tidak bisa dipakai untuk order baru</div>
                   </button>
 
-                  {/* Option 2: Force delete (unlink orders) - RECOMMENDED */}
                   <button
                     onClick={forceDeleteTable}
                     className="w-full text-left p-3 border-2 rounded-lg hover:bg-orange-50 border-orange-300 bg-orange-50/50 transition-colors"
@@ -774,7 +823,6 @@ export default function TablesPage() {
                     <div className="text-sm text-gray-600">Order dan transaksi tetap tersimpan, hanya tidak lagi terkait dengan meja ini</div>
                   </button>
 
-                  {/* Option 3: Go to orders page */}
                   <button
                     onClick={() => {
                       window.location.href = '/dashboard/orders';

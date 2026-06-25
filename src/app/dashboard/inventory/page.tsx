@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { DocumentArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { DocumentArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, XMarkIcon, FunnelIcon } from '@heroicons/react/24/outline';
 import Tesseract from 'tesseract.js';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -16,11 +16,9 @@ type ParsedInventoryItem = {
   minimum_stock?: number;
   cost_per_unit?: number;
   supplier?: string;
-  // transactions_connected and expense_payment_method are usually not in images, default false/cash
 };
 
-// Extend InventoryItem for temporary items
-type TempInventoryItem = InventoryItem & { id: string }; // id is temporary
+type TempInventoryItem = InventoryItem & { id: string };
 
 type InventoryItem = {
   id: string;
@@ -37,7 +35,6 @@ type InventoryItem = {
   expense_payment_method: string;
 };
 
-// Adjust entrance stagger timing here.
 const inventoryListVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -50,7 +47,7 @@ export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null); // new
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     sku: '',
     name: '',
@@ -69,6 +66,11 @@ export default function InventoryPage() {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
 
+  // Search & filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterLowStock, setFilterLowStock] = useState(false);
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+
   const { user, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
@@ -76,6 +78,51 @@ export default function InventoryPage() {
       fetchInventory();
     }
   }, [user]);
+
+  // Extract unique categories from items
+  const availableCategories = useMemo(() => {
+    const cats = new Set<string>();
+    items.forEach(item => {
+      if (item.category && item.category.trim() !== '') {
+        cats.add(item.category);
+      }
+    });
+    return Array.from(cats).sort();
+  }, [items]);
+
+  // Filter items based on search, low stock, and category
+  const filteredItems = useMemo(() => {
+    let result = [...items];
+
+    // Search by name, SKU, category, supplier
+    if (searchTerm.trim() !== '') {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(item =>
+        item.name.toLowerCase().includes(term) ||
+        item.sku.toLowerCase().includes(term) ||
+        (item.category && item.category.toLowerCase().includes(term)) ||
+        (item.supplier && item.supplier.toLowerCase().includes(term))
+      );
+    }
+
+    // Low stock filter
+    if (filterLowStock) {
+      result = result.filter(item => item.current_stock <= item.minimum_stock);
+    }
+
+    // Category filter
+    if (filterCategory !== 'all') {
+      result = result.filter(item => item.category === filterCategory);
+    }
+
+    return result;
+  }, [items, searchTerm, filterLowStock, filterCategory]);
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setFilterLowStock(false);
+    setFilterCategory('all');
+  };
 
   const splitTextIntoChunks = (text: string, maxCharsPerChunk: number): string[] => {
     const lines = text.split('\n');
@@ -168,7 +215,6 @@ export default function InventoryPage() {
 
       if (!aiResponse) return [];
 
-      // Bersihkan markdown
       let jsonText = aiResponse.trim();
       const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (jsonMatch) jsonText = jsonMatch[1];
@@ -212,7 +258,6 @@ export default function InventoryPage() {
         }
       }
 
-      // Convert to temporary InventoryItem objects
       const newUnsavedItems = allParsedItems.map((item, index) => ({
         id: `temp-${Date.now()}-${index}-${Math.random()}`,
         sku: item.sku || `INV-${Date.now().toString().slice(-6)}-${index}`,
@@ -350,7 +395,7 @@ export default function InventoryPage() {
       }
       setShowBulkModal(false);
       setUnsavedItems([]);
-      fetchInventory(); // refresh table
+      fetchInventory();
       alert('Semua item berhasil ditambahkan');
     } catch (error) {
       console.error('Error saving bulk items:', error);
@@ -669,7 +714,6 @@ export default function InventoryPage() {
       const previousStock = existingItem?.current_stock || 0;
       const stockIncrease = Math.max(0, formData.current_stock - previousStock);
 
-      // Update existing item
       const { error: updateError } = await supabase
         .from('inventory')
         .update(payload)
@@ -689,7 +733,6 @@ export default function InventoryPage() {
         };
       }
     } else {
-      // Insert new item
       const { data: insertedItem, error: insertError } = await supabase
         .from('inventory')
         .insert(payload)
@@ -799,12 +842,11 @@ export default function InventoryPage() {
   }
 
   const lowStockItems = items.filter(item => item.current_stock <= item.minimum_stock);
-  // Edit low stock threshold here (ratio to minimum stock).
   const STOCK_BAR_RATIO = 2;
 
   return (
     <div className="py-4 sm:py-6">
-      <div className="flex space-x-3">
+      <div className="flex flex-wrap gap-3 mb-6">
         <button
           onClick={() => document.getElementById('inventory-image-upload')?.click()}
           className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex items-center"
@@ -829,6 +871,61 @@ export default function InventoryPage() {
         >
           + Tambah Item
         </button>
+      </div>
+
+      {/* Search & Filter Bar */}
+      <div className="mb-6 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 relative">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Cari item (nama, SKU, kategori, supplier)..."
+              className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <button
+              onClick={() => setFilterLowStock(!filterLowStock)}
+              className={`inline-flex items-center gap-1 px-3 py-2 rounded-lg text-sm transition-colors ${
+                filterLowStock
+                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <ExclamationTriangleIcon className="w-4 h-4" />
+              Stok Menipis
+            </button>
+            {availableCategories.length > 0 && (
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="all">Semua Kategori</option>
+                {availableCategories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            )}
+            {(searchTerm || filterLowStock || filterCategory !== 'all') && (
+              <button
+                onClick={resetFilters}
+                className="p-2 text-primary hover:bg-primary/10 rounded-lg"
+                title="Reset filter"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        </div>
+        {filteredItems.length !== items.length && (
+          <div className="mt-2 text-xs text-gray-500">
+            Menampilkan {filteredItems.length} dari {items.length} item
+          </div>
+        )}
       </div>
 
       {showForm && (
@@ -1007,111 +1104,128 @@ export default function InventoryPage() {
           <div className="col-span-2">Aksi</div>
         </div>
 
-        <motion.div
-          variants={inventoryListVariants}
-          initial="hidden"
-          animate="visible"
-          className="divide-y divide-gray-200"
-        >
-          <AnimatePresence initial={false}>
-            {items.map((item) => {
-              const isLowStock = item.current_stock <= item.minimum_stock;
-              const stockDenominator = Math.max(item.minimum_stock * STOCK_BAR_RATIO, 1);
-              const stockPercent = Math.min(100, Math.max(0, (item.current_stock / stockDenominator) * 100));
+        {filteredItems.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-4xl mb-2">📦</div>
+            <p className="text-gray-500">
+              {searchTerm || filterLowStock || filterCategory !== 'all'
+                ? 'Tidak ada item yang cocok dengan filter.'
+                : 'Belum ada item inventory.'}
+            </p>
+            {(searchTerm || filterLowStock || filterCategory !== 'all') && (
+              <button
+                onClick={resetFilters}
+                className="mt-3 text-primary hover:underline text-sm"
+              >
+                Reset filter
+              </button>
+            )}
+          </div>
+        ) : (
+          <motion.div
+            variants={inventoryListVariants}
+            initial="hidden"
+            animate="visible"
+            className="divide-y divide-gray-200"
+          >
+            <AnimatePresence initial={false}>
+              {filteredItems.map((item) => {
+                const isLowStock = item.current_stock <= item.minimum_stock;
+                const stockDenominator = Math.max(item.minimum_stock * STOCK_BAR_RATIO, 1);
+                const stockPercent = Math.min(100, Math.max(0, (item.current_stock / stockDenominator) * 100));
 
-              return (
-                <motion.div
-                  key={item.id}
-                  layout
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.25, ease: 'easeOut' }}
-                  className={`px-6 py-4 transition-all duration-200 hover:shadow-md hover:translate-x-1 ${
-                    isLowStock ? 'bg-red-50/60' : 'bg-white'
-                  }`}
-                >
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
-                    <div className="lg:col-span-2 font-mono text-sm text-gray-700">{item.sku}</div>
+                return (
+                  <motion.div
+                    key={item.id}
+                    layout
+                    initial={{ opacity: 0, y: 14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.25, ease: 'easeOut' }}
+                    className={`px-6 py-4 transition-all duration-200 hover:shadow-md hover:translate-x-1 ${
+                      isLowStock ? 'bg-red-50/60' : 'bg-white'
+                    }`}
+                  >
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+                      <div className="lg:col-span-2 font-mono text-sm text-gray-700">{item.sku}</div>
 
-                    <div className="lg:col-span-3">
-                      <div className="text-sm font-medium text-gray-900">{item.name}</div>
-                      <div className="text-xs text-gray-500">{item.category}</div>
-                    </div>
+                      <div className="lg:col-span-3">
+                        <div className="text-sm font-medium text-gray-900">{item.name}</div>
+                        <div className="text-xs text-gray-500">{item.category}</div>
+                      </div>
 
-                    <div className="lg:col-span-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-900">
-                          {item.current_stock} {item.unit}
-                        </span>
-                        {isLowStock && (
-                          <motion.span
-                            // Tweak warning icon animation here.
-                            animate={{ x: [0, -1, 1, -1, 1, 0] }}
-                            transition={{ duration: 0.7, repeat: Infinity, repeatDelay: 1.8, ease: 'easeInOut' }}
-                            className="inline-flex text-amber-600"
-                            title="Stok rendah"
+                      <div className="lg:col-span-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900">
+                            {item.current_stock} {item.unit}
+                          </span>
+                          {isLowStock && (
+                            <motion.span
+                              animate={{ x: [0, -1, 1, -1, 1, 0] }}
+                              transition={{ duration: 0.7, repeat: Infinity, repeatDelay: 1.8, ease: 'easeInOut' }}
+                              className="inline-flex text-amber-600"
+                              title="Stok rendah"
+                            >
+                              <ExclamationTriangleIcon className="w-4 h-4" />
+                            </motion.span>
+                          )}
+                        </div>
+
+                        <div className="mt-2 h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                          <motion.div
+                            initial={{ width: '0%' }}
+                            animate={{ width: `${stockPercent}%` }}
+                            transition={{ duration: 0.8, ease: 'easeOut' }}
+                            className={`h-full rounded-full ${isLowStock ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="lg:col-span-1 text-sm text-gray-700">
+                        {item.minimum_stock} {item.unit}
+                      </div>
+
+                      <div className="lg:col-span-1 text-sm text-gray-700">
+                        Rp {item.cost_per_unit.toLocaleString()}
+                      </div>
+
+                      <div className="lg:col-span-2">
+                        <div className="flex flex-wrap gap-2 items-center">
+                          <button
+                            onClick={() => updateStock(item.id, 1)}
+                            className="px-2 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-semibold"
                           >
-                            <ExclamationTriangleIcon className="w-4 h-4" />
-                          </motion.span>
-                        )}
+                            +1
+                          </button>
+                          <button
+                            onClick={() => updateStock(item.id, -1)}
+                            className="px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={item.current_stock <= 0}
+                          >
+                            -1
+                          </button>
+                          <button
+                            onClick={() => updateStock(item.id, 10)}
+                            className="px-2 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-semibold"
+                          >
+                            +10
+                          </button>
+                          <button
+                            onClick={() => handleEdit(item)}
+                            className="px-2 py-1 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded text-xs font-semibold"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                        <div className="mt-1 text-xs text-gray-500 truncate">{item.supplier || '-'}</div>
                       </div>
-
-                      <div className="mt-2 h-2 w-full rounded-full bg-slate-200 overflow-hidden">
-                        <motion.div
-                          // Edit stock bar fill behavior here.
-                          initial={{ width: '0%' }}
-                          animate={{ width: `${stockPercent}%` }}
-                          transition={{ duration: 0.8, ease: 'easeOut' }}
-                          className={`h-full rounded-full ${isLowStock ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                        />
-                      </div>
                     </div>
-
-                    <div className="lg:col-span-1 text-sm text-gray-700">
-                      {item.minimum_stock} {item.unit}
-                    </div>
-
-                    <div className="lg:col-span-1 text-sm text-gray-700">
-                      Rp {item.cost_per_unit.toLocaleString()}
-                    </div>
-
-                    <div className="lg:col-span-2">
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <button
-                          onClick={() => updateStock(item.id, 1)}
-                          className="px-2 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-semibold"
-                        >
-                          +1
-                        </button>
-                        <button
-                          onClick={() => updateStock(item.id, -1)}
-                          className="px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={item.current_stock <= 0}
-                        >
-                          -1
-                        </button>
-                        <button
-                          onClick={() => updateStock(item.id, 10)}
-                          className="px-2 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-semibold"
-                        >
-                          +10
-                        </button>
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="px-2 py-1 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded text-xs font-semibold"
-                        >
-                          Edit
-                        </button>
-                      </div>
-                      <div className="mt-1 text-xs text-gray-500 truncate">{item.supplier || '-'}</div>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </motion.div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </motion.div>
+        )}
       </div>
       {showBulkModal && (
         <BulkInventoryImportModal

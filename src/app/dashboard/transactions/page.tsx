@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect, type Dispatch, type SetStateAction } from 'react';
+import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
   CalendarIcon,
@@ -11,10 +11,11 @@ import {
   EyeIcon,
   PlusIcon,
   ReceiptRefundIcon,
-  BanknotesIcon
+  BanknotesIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { DocumentArrowUpIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import Tesseract from 'tesseract.js';
@@ -378,17 +379,22 @@ export default function TransactionsPage() {
   // Default filter: Bulan Ini (tanggal 1 sampai hari ini)
   const [startDate, setStartDate] = useState<Date | null>(() => {
     const date = new Date();
-    date.setDate(1); // Tanggal 1 bulan ini
+    date.setDate(1);
     date.setHours(0, 0, 0, 0);
     return date;
   });
   const [endDate, setEndDate] = useState<Date | null>(() => {
     const date = new Date();
     date.setHours(23, 59, 59, 999);
-    return date; // Hari ini
+    return date;
   });
   const [paymentMethod, setPaymentMethod] = useState<string>('all');
   const [transactionType, setTransactionType] = useState<string>('all');
+  
+  // NEW: search and extra filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState<string>('all');
+
   const [summary, setSummary] = useState({
     totalSales: 0,
     totalRefunds: 0,
@@ -447,7 +453,7 @@ export default function TransactionsPage() {
       const { error } = await supabase.from('transactions').insert({
         user_id: ownerId,
         transaction_number: transactionNumber,
-        type: 'sale', // gunakan sale untuk mencatat pemasukan
+        type: 'sale',
         amount: parseFloat(incomeForm.amount),
         payment_method: incomeForm.payment_method,
         status: 'completed',
@@ -467,7 +473,6 @@ export default function TransactionsPage() {
     }
   };
 
-  // Form state
   const [formData, setFormData] = useState({
     amount: '',
     payment_method: 'cash',
@@ -482,7 +487,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     if (user?.id) {
       fetchTransactions();
-      fetchPaidOrders(); // Fetch orders for refund selection
+      fetchPaidOrders();
     }
   }, [startDate, endDate, paymentMethod, transactionType, user]);
 
@@ -697,7 +702,6 @@ export default function TransactionsPage() {
       return false;
     };
 
-    // --- Step 1: Detect the header month (e.g. "Maret") ---
     let headerMonth: string | null = null;
     for (const line of lines) {
       const word = line.trim().toLowerCase();
@@ -707,7 +711,6 @@ export default function TransactionsPage() {
       }
     }
 
-    // --- Step 2: Find all type-indicator lines (THE anchors) ---
     const typePattern = /TRSF.*\b(CR|DB)\b|\bE-BANKING\s*(CR|DB)\b|TRANSAKSI\s*(DEBIT|CREDIT)/i;
     const typeIndices: number[] = [];
     for (let i = 0; i < lines.length; i++) {
@@ -721,9 +724,6 @@ export default function TransactionsPage() {
     const headerEnd = lines.findIndex((l) => !!monthMap[l.toLowerCase().trim()]);
     const contentStart = headerEnd >= 0 ? headerEnd + 1 : 0;
 
-    console.log(`[BankMutation] Found ${typeIndices.length} type-indicator lines`);
-
-    // --- Step 3: For each type line, scan forward for amount, backward for description ---
     const results: ParsedImportedTransaction[] = [];
 
     for (let t = 0; t < typeIndices.length; t++) {
@@ -731,7 +731,6 @@ export default function TransactionsPage() {
       const typeLine = lines[typeIdx];
       const upper = typeLine.toUpperCase();
 
-      // --- Type ---
       const hasDebit = /\bDB\b|DEBIT/.test(upper);
       const hasCredit = /\bCR\b|CREDIT/.test(upper);
       let transactionType: 'expense' | 'income';
@@ -739,7 +738,6 @@ export default function TransactionsPage() {
       else if (hasCredit && !hasDebit) transactionType = 'income';
       else transactionType = 'expense';
 
-      // --- Amount: scan forward up to 3 lines (but not past next type line) ---
       let amount = 0;
       const nextBoundary = t < typeIndices.length - 1 ? typeIndices[t + 1] : lines.length;
       for (let a = typeIdx + 1; a < Math.min(typeIdx + 4, nextBoundary); a++) {
@@ -756,7 +754,6 @@ export default function TransactionsPage() {
         }
       }
 
-      // --- Description: scan backward from type line to previous boundary ---
       const prevBoundary = t === 0 ? contentStart : typeIndices[t - 1] + 1;
       const descParts: string[] = [];
       for (let d = typeIdx - 1; d >= prevBoundary; d--) {
@@ -779,7 +776,6 @@ export default function TransactionsPage() {
         .join(' ')
         .trim() || `OCR ${transactionType}`;
 
-      // --- Date: gather from vicinity (desc lines + type line + forward lines) ---
       const vicinity = [
         ...descParts,
         typeLine,
@@ -835,8 +831,6 @@ export default function TransactionsPage() {
       const txDate = (day && month && year)
         ? `${year}-${month}-${day}`
         : (day && month) ? `${new Date().getFullYear()}-${month}-${day}` : getTodayInputDate();
-
-      console.log(`[BankMutation] #${t + 1}: typeLine="${typeLine}" | type=${transactionType} | amount=${amount} | desc="${description}"`);
 
       results.push({
         amount,
@@ -927,7 +921,6 @@ export default function TransactionsPage() {
 
       if (!aiResponse) return [];
 
-      // Bersihkan markdown
       let jsonText = aiResponse.trim();
       const jsonMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (jsonMatch) jsonText = jsonMatch[1];
@@ -1175,8 +1168,6 @@ export default function TransactionsPage() {
     try {
       const ownerId = user.user_type === 'staff' ? user.user_id : user.id;
 
-      // SECURITY: Only fetch transactions for the current logged-in user
-      // RLS policy also enforces this at database level
       let query = supabase
         .from('transactions')
         .select(`
@@ -1188,7 +1179,6 @@ export default function TransactionsPage() {
         `)
         .eq('user_id', ownerId);
 
-      // Apply date filter
       if (startDate) {
         const start = new Date(startDate);
         start.setHours(0, 0, 0, 0);
@@ -1200,12 +1190,10 @@ export default function TransactionsPage() {
         query = query.lte('created_at', end.toISOString());
       }
 
-      // Apply payment method filter
       if (paymentMethod !== 'all') {
         query = query.eq('payment_method', paymentMethod);
       }
 
-      // Apply transaction type filter
       if (transactionType !== 'all') {
         query = query.eq('type', transactionType);
       }
@@ -1222,23 +1210,6 @@ export default function TransactionsPage() {
         }));
 
         setTransactions(formattedTransactions);
-
-        // Calculate summary
-        const sales = formattedTransactions.filter(t => t.type === 'sale');
-        const refunds = formattedTransactions.filter(t => t.type === 'refund');
-        const expenses = formattedTransactions.filter(t => t.type === 'expense');
-
-        const totalSales = sales.reduce((sum, t) => sum + t.amount, 0);
-        const totalRefunds = refunds.reduce((sum, t) => sum + t.amount, 0);
-        const totalExpenses = expenses.reduce((sum, t) => sum + t.amount, 0);
-
-        setSummary({
-          totalSales,
-          totalRefunds,
-          totalExpenses,
-          netIncome: totalSales - totalRefunds - totalExpenses,
-          totalTransactions: formattedTransactions.length,
-        });
       } else {
         console.error('Error fetching transactions:', error);
       }
@@ -1288,7 +1259,6 @@ export default function TransactionsPage() {
   const handleSubmitExpenseRefund = async () => {
     if (!user?.id) return;
 
-    // Validation
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
       setModalError('Jumlah harus lebih dari 0');
       return;
@@ -1318,9 +1288,7 @@ export default function TransactionsPage() {
           : `Refund: ${formData.refund_reason || 'Tidak ada alasan'}`,
       };
 
-      // For refund, link to order
       if (modalType === 'refund' && formData.order_id) {
-        // Verify the order belongs to current user
         const { data: orderCheck, error: orderCheckError } = await supabase
           .from('orders')
           .select('id')
@@ -1336,7 +1304,6 @@ export default function TransactionsPage() {
         
         transactionData.order_id = formData.order_id;
 
-        // Update order payment status to refunded
         await supabase
           .from('orders')
           .update({ payment_status: 'refunded' })
@@ -1350,13 +1317,11 @@ export default function TransactionsPage() {
 
       if (error) throw error;
 
-      // Close modal and refresh data
       setShowModal(false);
       setShowSuccessAnim(true);
       setTimeout(() => setShowSuccessAnim(false), 1300);
       fetchTransactions();
 
-      // Reset form
       setFormData({
         amount: '',
         payment_method: 'cash',
@@ -1387,7 +1352,7 @@ export default function TransactionsPage() {
       'Catatan',
     ];
 
-    const csvData = transactions.map(transaction => [
+    const csvData = filteredTransactions.map(transaction => [
       transaction.transaction_number,
       new Date(transaction.created_at).toLocaleDateString('id-ID'),
       getDisplayTransactionType(transaction) === 'sale'
@@ -1460,7 +1425,77 @@ export default function TransactionsPage() {
     setShowDetailModal(true);
   };
 
-  // Tampilkan loading jika auth masih loading
+  // NEW: computed filtered transactions based on search term and expense category
+  const filteredTransactions = useMemo(() => {
+    let filtered = [...transactions];
+
+    // Search: transaction number, order number, customer name, notes
+    if (searchTerm.trim() !== '') {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(t =>
+        t.transaction_number.toLowerCase().includes(term) ||
+        (t.order_number && t.order_number.toLowerCase().includes(term)) ||
+        (t.customer_name && t.customer_name.toLowerCase().includes(term)) ||
+        (t.notes && t.notes.toLowerCase().includes(term))
+      );
+    }
+
+    // Expense category filter (only applies to expense transactions)
+    if (expenseCategory !== 'all') {
+      filtered = filtered.filter(t => {
+        if (t.type !== 'expense') return true;
+        const match = t.notes?.match(/^(ingredients|operational|utilities|salary|rent|marketing|maintenance|other):/);
+        const category = match ? match[1] : 'operational';
+        return category === expenseCategory;
+      });
+    }
+
+    return filtered;
+  }, [transactions, searchTerm, expenseCategory]);
+
+  // Recalculate summary whenever filteredTransactions changes
+  useEffect(() => {
+    const sales = filteredTransactions.filter(t => getDisplayTransactionType(t) === 'sale' || getDisplayTransactionType(t) === 'income');
+    const refunds = filteredTransactions.filter(t => t.type === 'refund');
+    const expenses = filteredTransactions.filter(t => t.type === 'expense');
+    const totalSales = sales.reduce((sum, t) => sum + t.amount, 0);
+    const totalRefunds = refunds.reduce((sum, t) => sum + t.amount, 0);
+    const totalExpenses = expenses.reduce((sum, t) => sum + t.amount, 0);
+    setSummary({
+      totalSales,
+      totalRefunds,
+      totalExpenses,
+      netIncome: totalSales - totalRefunds - totalExpenses,
+      totalTransactions: filteredTransactions.length,
+    });
+  }, [filteredTransactions]);
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setExpenseCategory('all');
+    setPaymentMethod('all');
+    setTransactionType('all');
+    const today = new Date();
+    today.setDate(1);
+    today.setHours(0, 0, 0, 0);
+    setStartDate(today);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    setEndDate(end);
+  };
+
+  // Extract unique expense categories from transaction notes
+  const expenseCategoriesFromNotes = useMemo(() => {
+    const cats = new Set<string>();
+    transactions.forEach(t => {
+      if (t.type === 'expense') {
+        const match = t.notes?.match(/^(ingredients|operational|utilities|salary|rent|marketing|maintenance|other):/);
+        if (match) cats.add(match[1]);
+      }
+    });
+    return Array.from(cats).sort();
+  }, [transactions]);
+
   if (authLoading || loading) {
     return (
       <div className="py-4 sm:py-6">
@@ -1472,7 +1507,6 @@ export default function TransactionsPage() {
     );
   }
 
-  // Tampilkan pesan jika tidak ada user (belum login)
   if (!user) {
     return (
       <div className="py-4 sm:py-6">
@@ -1494,7 +1528,6 @@ export default function TransactionsPage() {
             exit={{ opacity: 0, scale: 0.9 }}
             className="fixed inset-0 z-[70] flex items-center justify-center pointer-events-none"
           >
-            {/* Customize finance success animation here. */}
             <motion.div
               initial={{ scale: 0.72, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -1514,7 +1547,7 @@ export default function TransactionsPage() {
         <p className="mt-2 text-gray-600">Pantau semua transaksi keuangan restoran Anda</p>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards - using filtered data */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow p-6">
           <div className="flex items-center justify-between">
@@ -1529,7 +1562,7 @@ export default function TransactionsPage() {
             </div>
           </div>
           <div className="mt-4 text-sm text-gray-500">
-            {transactions.filter(t => getDisplayTransactionType(t) === 'sale' || getDisplayTransactionType(t) === 'income').length} transaksi
+            {filteredTransactions.filter(t => getDisplayTransactionType(t) === 'sale' || getDisplayTransactionType(t) === 'income').length} transaksi
           </div>
         </div>
 
@@ -1546,7 +1579,7 @@ export default function TransactionsPage() {
             </div>
           </div>
           <div className="mt-4 text-sm text-gray-500">
-            {transactions.filter(t => t.type === 'refund').length} transaksi
+            {filteredTransactions.filter(t => t.type === 'refund').length} transaksi
           </div>
         </div>
 
@@ -1563,7 +1596,7 @@ export default function TransactionsPage() {
             </div>
           </div>
           <div className="mt-4 text-sm text-gray-500">
-            {transactions.filter(t => t.type === 'expense').length} transaksi
+            {filteredTransactions.filter(t => t.type === 'expense').length} transaksi
           </div>
         </div>
 
@@ -1571,13 +1604,11 @@ export default function TransactionsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Pendapatan Bersih</p>
-              <p className={`text-2xl font-bold mt-2 ${summary.netIncome >= 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
+              <p className={`text-2xl font-bold mt-2 ${summary.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 <CountUpValue value={summary.netIncome} />
               </p>
             </div>
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${summary.netIncome >= 0 ? 'bg-green-100' : 'bg-red-100'
-              }`}>
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${summary.netIncome >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
               <span className="text-2xl">{summary.netIncome >= 0 ? '💰' : '📉'}</span>
             </div>
           </div>
@@ -1617,7 +1648,6 @@ export default function TransactionsPage() {
                 <PlusIcon className="w-5 h-5 mr-2" />
                 Tambah Pemasukan
               </button>
-              {/* New upload button */}
               <button
                 onClick={() => document.getElementById('expense-image-upload')?.click()}
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center"
@@ -1705,7 +1735,7 @@ export default function TransactionsPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Tanggal Mulai
@@ -1769,6 +1799,70 @@ export default function TransactionsPage() {
             </select>
           </div>
         </div>
+
+        {/* NEW: Search and Expense Category Filter */}
+        <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
+          <div className="flex-1 relative">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Cari transaksi (No. transaksi, No. order, pelanggan, catatan)..."
+              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          {expenseCategoriesFromNotes.length > 0 && (
+            <div className="w-full sm:w-64">
+              <select
+                value={expenseCategory}
+                onChange={(e) => setExpenseCategory(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="all">Semua Kategori Pengeluaran</option>
+                {expenseCategoriesFromNotes.map(cat => {
+                  let label = '';
+                  switch (cat) {
+                    case 'ingredients': label = 'Bahan Baku'; break;
+                    case 'operational': label = 'Operasional'; break;
+                    case 'utilities': label = 'Listrik/Air/Internet'; break;
+                    case 'salary': label = 'Gaji Karyawan'; break;
+                    case 'rent': label = 'Sewa Tempat'; break;
+                    case 'marketing': label = 'Marketing'; break;
+                    case 'maintenance': label = 'Pemeliharaan'; break;
+                    case 'other': label = 'Lainnya'; break;
+                    default: label = cat;
+                  }
+                  return <option key={cat} value={cat}>{label}</option>;
+                })}
+              </select>
+            </div>
+          )}
+          {(
+            searchTerm ||
+            expenseCategory !== 'all' ||
+            paymentMethod !== 'all' ||
+            transactionType !== 'all' ||
+            (startDate &&
+              startDate.toISOString().slice(0, 10) !==
+                new Date(
+                  new Date().getFullYear(),
+                  new Date().getMonth(),
+                  1
+                ).toISOString().slice(0, 10)) ||
+            (endDate &&
+              endDate.toISOString().slice(0, 10) !==
+                new Date().toISOString().slice(0, 10))
+          ) ? (
+            <button
+              onClick={resetFilters}
+              className="inline-flex items-center px-4 py-2 text-sm text-primary hover:bg-primary/10 rounded-lg border border-primary/20"
+            >
+              <XMarkIcon className="w-4 h-4 mr-1" />
+              Reset Filter
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {/* Transactions Table */}
@@ -1801,7 +1895,7 @@ export default function TransactionsPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {transactions.map((transaction) => (
+              {filteredTransactions.map((transaction) => (
                 <tr key={transaction.id} className="hover:bg-primary/5 transition-colors duration-75">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
@@ -1882,12 +1976,18 @@ export default function TransactionsPage() {
           </table>
         </div>
 
-        {transactions.length === 0 && (
+        {filteredTransactions.length === 0 && (
           <div className="text-center py-12">
             <div className="text-4xl mb-4">📊</div>
-            <h3 className="text-lg font-medium text-gray-900">Tidak ada transaksi</h3>
+            <h3 className="text-lg font-medium text-gray-900">
+              {searchTerm || expenseCategory !== 'all' || paymentMethod !== 'all' || transactionType !== 'all'
+                ? 'Tidak ada transaksi yang cocok'
+                : 'Tidak ada transaksi'}
+            </h3>
             <p className="mt-2 text-gray-600">
-              Tidak ditemukan transaksi dengan filter yang dipilih
+              {searchTerm || expenseCategory !== 'all' || paymentMethod !== 'all' || transactionType !== 'all'
+                ? 'Coba ubah filter atau reset filter'
+                : 'Tidak ditemukan transaksi dengan filter yang dipilih'}
             </p>
             <div className="mt-6 flex gap-4 justify-center">
               <button
@@ -1902,7 +2002,7 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* Expense/Refund Modal */}
+      {/* Modals remain unchanged */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -1937,7 +2037,6 @@ export default function TransactionsPage() {
             )}
 
             <div className="space-y-6">
-              {/* Amount */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Jumlah (Rp) *
@@ -1953,7 +2052,6 @@ export default function TransactionsPage() {
                 />
               </div>
 
-              {/* Payment Method */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Metode Pembayaran *
@@ -1970,7 +2068,6 @@ export default function TransactionsPage() {
                 </select>
               </div>
 
-              {/* Refund: Order Selection */}
               {modalType === 'refund' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1995,7 +2092,6 @@ export default function TransactionsPage() {
                 </div>
               )}
 
-              {/* Expense: Category */}
               {modalType === 'expense' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2018,7 +2114,6 @@ export default function TransactionsPage() {
                 </div>
               )}
 
-              {/* Refund: Reason */}
               {modalType === 'refund' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2034,7 +2129,6 @@ export default function TransactionsPage() {
                 </div>
               )}
 
-              {/* Notes */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   {modalType === 'expense' ? 'Keterangan Pengeluaran' : 'Catatan Tambahan'}
@@ -2200,7 +2294,6 @@ export default function TransactionsPage() {
         />
       )}
 
-      {/* Transaction Detail Modal */}
       {showDetailModal && selectedTransaction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full">
