@@ -13,6 +13,7 @@ const nextConfig = {
       }
     ]
   }
+  // HAPUS output: 'export' dan unoptimized: true
 }
 
 module.exports = nextConfig

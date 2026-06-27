@@ -6,13 +6,16 @@ export default function PWAInstallPrompt() {
   const [show, setShow] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
     const ua = navigator.userAgent.toLowerCase();
     const ios = /iphone|ipad|ipod/.test(ua);
+    const android = /android/.test(ua);
     const standalone = window.matchMedia('(display-mode: standalone)').matches;
     setIsIOS(ios);
+    setIsAndroid(android);
     setIsStandalone(standalone);
 
     if (standalone) return;
@@ -20,7 +23,8 @@ export default function PWAInstallPrompt() {
     const dismissed = localStorage.getItem('pwa-prompt-dismissed');
     if (dismissed === 'true') return;
 
-    if (!ios) {
+    if (!ios && !android) {
+      // Desktop (Windows/Mac) – bisa install PWA via browser
       const handler = (e: Event) => {
         e.preventDefault();
         setDeferredPrompt(e);
@@ -28,9 +32,20 @@ export default function PWAInstallPrompt() {
       };
       window.addEventListener('beforeinstallprompt', handler);
       return () => window.removeEventListener('beforeinstallprompt', handler);
-    } else {
-      const isSafari = /safari/.test(ua) && !/chrome/.test(ua);
-      if (isSafari) setShow(true);
+    } else if (ios) {
+      // iOS – tampilkan instruksi
+      setShow(true);
+    } else if (android) {
+      // Android – cek apakah browser support beforeinstallprompt
+      // Kita tampilkan prompt, tapi jika tidak ada deferredPrompt, nanti tombol download APK akan muncul
+      setShow(true);
+      // Cek apakah ada beforeinstallprompt (akan di-set oleh event listener)
+      const handler = (e: Event) => {
+        e.preventDefault();
+        setDeferredPrompt(e);
+      };
+      window.addEventListener('beforeinstallprompt', handler);
+      return () => window.removeEventListener('beforeinstallprompt', handler);
     }
   }, []);
 
@@ -49,6 +64,11 @@ export default function PWAInstallPrompt() {
     localStorage.setItem('pwa-prompt-dismissed', 'true');
   };
 
+  const handleDownloadApk = () => {
+    // Arahkan ke file APK yang sudah diletakkan di public/apk/
+    window.location.href = '/apk/JetNote-Pos.apk';
+  };
+
   if (!show) return null;
 
   return (
@@ -58,7 +78,7 @@ export default function PWAInstallPrompt() {
         bottom: 20,
         left: 20,
         right: 20,
-        background: '#FF6B6B', // your primary color
+        background: '#FF6B6B',
         color: '#fff',
         padding: '16px',
         borderRadius: 16,
@@ -73,6 +93,8 @@ export default function PWAInstallPrompt() {
       <p style={{ margin: '0 0 16px 0', fontSize: 14, opacity: 0.9 }}>
         {isIOS ? (
           <>Tap tombol Bagikan <span style={{ fontSize: 18 }}>⎙</span> lalu pilih <strong>Add to Home Screen</strong>.</>
+        ) : isAndroid && !deferredPrompt ? (
+          <>Download APK untuk menginstal aplikasi versi Android.</>
         ) : (
           <>Install aplikasi untuk akses lebih cepat dan offline.</>
         )}
@@ -107,6 +129,23 @@ export default function PWAInstallPrompt() {
             }}
           >
             Install
+          </button>
+        )}
+        {isAndroid && !deferredPrompt && (
+          <button
+            onClick={handleDownloadApk}
+            style={{
+              background: '#fff',
+              color: '#FF6B6B',
+              border: 'none',
+              padding: '6px 18px',
+              borderRadius: 20,
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: 14,
+            }}
+          >
+            Download APK
           </button>
         )}
         {isIOS && (
