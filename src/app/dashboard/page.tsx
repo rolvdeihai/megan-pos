@@ -35,6 +35,7 @@ export default function DashboardPage() {
   });
   const [statsLoading, setStatsLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange>('thisMonth');
+  const [autoOpenOrder, setAutoOpenOrder] = useState(false);
 
   // Helper: konversi pilihan range ke start_date & end_date (ISO string)
   const getDateRangeParams = (range: DateRange) => {
@@ -98,6 +99,13 @@ export default function DashboardPage() {
       fetchStats(dateRange);
     }
   }, [user, dateRange]);
+
+  // 🔹 Efek untuk menentukan auto-open berdasarkan user type
+  useEffect(() => {
+    if (user && user.user_type !== 'owner') {
+      setAutoOpenOrder(true);
+    }
+  }, [user]);
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('id-ID', {
@@ -298,7 +306,7 @@ export default function DashboardPage() {
 
         <main className="flex-1 min-w-0">
           <div className="-mt-4 -mx-4 sm:-mx-6 lg:mt-0 lg:mx-0">
-            <OrdersPage />
+            <OrdersPage autoOpen={autoOpenOrder} />
           </div>
         </main>
       </div>

@@ -1,5 +1,3 @@
-// src/app/dashboard/orders/page.tsx
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -52,7 +50,12 @@ const orderCardVariants = {
   },
 };
 
-export default function OrdersPage() {
+// ===== DEFINE PROPS INTERFACE =====
+interface OrdersPageProps {
+  autoOpen?: boolean; // jika true, modal order akan terbuka otomatis
+}
+
+export default function OrdersPage({ autoOpen = false }: OrdersPageProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [tables, setTables] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
@@ -70,11 +73,37 @@ export default function OrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [hasAutoOpened, setHasAutoOpened] = useState(false);
 
   const { user, isLoading: authLoading } = useAuth();
   const ownerId = getOwnerId(user);
   const router = useRouter();
 
+  useEffect(() => {
+    // Jangan buka jika sudah pernah dibuka
+    if (hasAutoOpened) return;
+    // Tunggu user selesai dimuat
+    if (!user) return;
+
+    // Kondisi: autoOpen dari prop ATAU user bukan owner
+    const shouldOpen = autoOpen || (user.user_type !== 'owner');
+
+    if (shouldOpen) {
+      setShowOrderModal(true);
+      setHasAutoOpened(true);
+    }
+  }, [user, autoOpen, hasAutoOpened]);
+
+  // ===== AUTO OPEN MODAL jika prop autoOpen = true =====
+  useEffect(() => {
+    if (autoOpen) {
+      setShowOrderModal(true);
+      // opsional: setelah terbuka, kita tidak perlu lagi memicu ulang
+      // karena prop dari parent hanya di-set sekali berdasarkan user type
+    }
+  }, [autoOpen]);
+
+  // ===== FETCH DATA =====
   useEffect(() => {
     if (user?.id) {
       fetchData();
@@ -168,6 +197,7 @@ export default function OrdersPage() {
     }
   };
 
+  // ===== CREATE ORDER =====
   const createOrder = async (orderData: any) => {
     if (!ownerId || !user) return;
     if (isSubmitting) return;

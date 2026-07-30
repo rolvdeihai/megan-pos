@@ -319,14 +319,22 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
   const handlePrintHTML = () => {
     if (!orderDetails) return;
 
-    // Peringatan untuk iOS
     if (platformOS === 'ios') {
       alert('⚠️ Cetak via AirPrint menggunakan HTML. Hasil mungkin tidak sepresisi cetak native.');
     }
 
-    const printWindow = window.open('', '_blank', 'width=400,height=600,scrollbars=no,resizable=no');
-    if (!printWindow) {
-      alert('Pop-up diblokir. Izinkan pop-up untuk mencetak.');
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      console.error('Cannot access iframe document');
+      document.body.removeChild(iframe);
       return;
     }
 
@@ -414,22 +422,297 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
       </html>
     `;
 
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
+    iframeDoc.open();
+    iframeDoc.write(html);
+    iframeDoc.close();
 
-    setTimeout(() => {
-      printWindow.print();
-    }, 600);
+    iframe.onload = () => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 1000);
+    };
+
+    if (iframe.contentWindow?.document.readyState === 'complete') {
+      iframe.onload?.(new Event('load'));
+    }
+  };
+
+  // ===== CETAK PDF INVOICE (versi lama dengan layout penuh) =====
+  const handlePrintPDF = () => {
+    if (!orderDetails) return;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      console.error('Cannot access iframe document');
+      document.body.removeChild(iframe);
+      return;
+    }
+
+    const restaurantName = user?.restaurant_name || 'Restoran JetNote Pos';
+    const createdAt = orderDetails.created_at ? formatInvoiceDate(orderDetails.created_at) : '-';
+
+    const itemRows = (orderDetails.items || []).map((item) => `
+      <tr>
+        <td class="item-cell">
+          <div class="item-name">${escapeHtml(item.name)}</div>
+          ${item.special_instructions ? `<div class="item-note">Catatan: ${escapeHtml(item.special_instructions)}</div>` : ''}
+        </td>
+        <td class="qty-cell">${item.quantity}</td>
+        <td class="price-cell">${formatMoney(item.unit_price)}</td>
+        <td class="price-cell total-cell">${formatMoney(item.total_price)}</td>
+      </tr>
+    `).join('');
+
+    const summaryRows = [
+      `<div class="summary-row"><span>Subtotal</span><span>${formatMoney(orderDetails.subtotal)}</span></div>`,
+      (orderDetails.discount_amount || 0) > 0
+        ? `<div class="summary-row discount"><span>Diskon (${orderDetails.discount_percentage || 0}%)</span><span>- ${formatMoney(orderDetails.discount_amount || 0)}</span></div>`
+        : '',
+      `<div class="summary-row"><span>Pajak (${orderDetails.tax_percentage || 0}%)</span><span>${formatMoney(orderDetails.tax_amount || 0)}</span></div>`,
+      (orderDetails.service_charge_amount || 0) > 0
+        ? `<div class="summary-row"><span>Service Charge (${orderDetails.service_charge_percentage || 0}%)</span><span>${formatMoney(orderDetails.service_charge_amount || 0)}</span></div>`
+        : '',
+      (orderDetails.delivery_fee || 0) > 0
+        ? `<div class="summary-row"><span>Biaya Pengiriman</span><span>${formatMoney(orderDetails.delivery_fee || 0)}</span></div>`
+        : '',
+    ].filter(Boolean).join('');
+
+    const invoiceHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Invoice ${orderDetails.order_number}</title>
+          <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body {
+              font-family: Arial, sans-serif;
+              background: white;
+              color: #0f172a;
+              padding: 32px 20px;
+            }
+            .shell { max-width: 920px; margin: 0 auto; }
+            .card {
+              background: #ffffff;
+              border: 1px solid #e5e7eb;
+              border-radius: 24px;
+              overflow: hidden;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              gap: 24px;
+              padding: 24px;
+              border-bottom: 1px solid #e5e7eb;
+              background: #f8fafc;
+            }
+            .eyebrow {
+              display: inline-block;
+              margin-bottom: 8px;
+              padding: 6px 12px;
+              border-radius: 999px;
+              background: rgba(37, 99, 235, 0.1);
+              color: #2563eb;
+              font-size: 12px;
+              font-weight: 700;
+            }
+            .title { margin: 0; font-size: 30px; }
+            .subtitle { margin: 6px 0 0; color: #64748b; font-size: 14px; }
+            .meta { display: flex; flex-wrap: wrap; gap: 10px; }
+            .meta-chip {
+              padding: 8px 12px;
+              border-radius: 999px;
+              background: #ffffff;
+              border: 1px solid #dbe2ea;
+              font-size: 12px;
+              font-weight: 700;
+            }
+            .content { padding: 24px; }
+            .info-grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 16px;
+              margin-bottom: 24px;
+            }
+            .info-card {
+              border: 1px solid #e5e7eb;
+              border-radius: 18px;
+              padding: 18px;
+            }
+            .info-title {
+              margin: 0 0 14px;
+              font-size: 12px;
+              font-weight: 800;
+              text-transform: uppercase;
+              color: #64748b;
+            }
+            .info-list { display: grid; gap: 10px; }
+            .info-row {
+              display: flex;
+              justify-content: space-between;
+              gap: 16px;
+              font-size: 14px;
+            }
+            .section-title { margin: 0 0 12px; font-size: 18px; }
+            .table-wrap {
+              border: 1px solid #e5e7eb;
+              border-radius: 18px;
+              overflow: hidden;
+            }
+            table { width: 100%; border-collapse: collapse; }
+            thead { background: #f8fafc; }
+            th {
+              padding: 14px 18px;
+              font-size: 12px;
+              text-transform: uppercase;
+              text-align: left;
+            }
+            td {
+              padding: 16px 18px;
+              border-top: 1px solid #edf2f7;
+              font-size: 14px;
+            }
+            .qty-cell, .price-cell { text-align: right; white-space: nowrap; }
+            .item-name { font-weight: 700; }
+            .item-note { margin-top: 6px; font-size: 12px; color: #6b7280; }
+            .summary {
+              width: min(100%, 360px);
+              margin: 24px 0 0 auto;
+              padding: 18px 20px;
+              border: 1px solid #e5e7eb;
+              border-radius: 18px;
+            }
+            .summary-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 10px;
+              font-size: 14px;
+            }
+            .discount span { color: #dc2626; }
+            .summary-total {
+              display: flex;
+              justify-content: space-between;
+              margin-top: 14px;
+              padding-top: 14px;
+              border-top: 1px solid #e5e7eb;
+              font-size: 18px;
+              font-weight: 800;
+            }
+            .notes {
+              margin-top: 24px;
+              padding: 18px;
+              border-radius: 18px;
+              background: #f8fafc;
+              font-size: 14px;
+            }
+            .footer {
+              margin-top: 24px;
+              text-align: center;
+              color: #64748b;
+              font-size: 13px;
+            }
+            @media (max-width: 640px) {
+              .info-grid { grid-template-columns: 1fr; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="shell">
+            <div class="card">
+              <div class="header">
+                <div>
+                  <div class="eyebrow">Invoice Pesanan</div>
+                  <h1 class="title">Invoice ${orderDetails.order_number}</h1>
+                  <p class="subtitle">${escapeHtml(restaurantName)}</p>
+                  <p class="subtitle">${createdAt}</p>
+                </div>
+                <div class="meta">
+                  <span class="meta-chip">${formatOrderType(orderDetails.order_type)}</span>
+                  ${orderDetails.table_number ? `<span class="meta-chip">Meja ${orderDetails.table_number}</span>` : ''}
+                </div>
+              </div>
+              <div class="content">
+                <div class="info-grid">
+                  <div class="info-card">
+                    <h2 class="info-title">Informasi Order</h2>
+                    <div class="info-list">
+                      <div class="info-row"><span>No. Order</span><span>${orderDetails.order_number}</span></div>
+                      <div class="info-row"><span>Tipe</span><span>${formatOrderType(orderDetails.order_type)}</span></div>
+                      ${orderDetails.table_number ? `<div class="info-row"><span>Meja</span><span>${orderDetails.table_number}</span></div>` : ''}
+                    </div>
+                  </div>
+                  <div class="info-card">
+                    <h2 class="info-title">Informasi Pelanggan</h2>
+                    <div class="info-list">
+                      <div class="info-row"><span>Nama</span><span>${escapeHtml(orderDetails.customer_name || '-')}</span></div>
+                      <div class="info-row"><span>Telepon</span><span>${escapeHtml(orderDetails.customer_phone || '-')}</span></div>
+                      ${orderDetails.delivery_address ? `<div class="info-row"><span>Alamat</span><span>${escapeHtml(orderDetails.delivery_address)}</span></div>` : ''}
+                    </div>
+                  </div>
+                </div>
+                <h2 class="section-title">Item Pesanan</h2>
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>Item</th><th class="qty-cell">Qty</th><th class="price-cell">Harga</th><th class="price-cell">Subtotal</th></tr></thead>
+                    <tbody>${itemRows}</tbody>
+                  </table>
+                </div>
+                <div class="summary">
+                  ${summaryRows}
+                  <div class="summary-total"><span>Total</span><span>${formatMoney(orderDetails.total_amount)}</span></div>
+                </div>
+                ${orderDetails.notes ? `<div class="notes"><strong>Catatan:</strong> ${escapeHtml(orderDetails.notes)}</div>` : ''}
+              </div>
+            </div>
+            <div class="footer"><p>Terima kasih telah berbelanja di ${escapeHtml(restaurantName)}.</p></div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    iframeDoc.open();
+    iframeDoc.write(invoiceHtml);
+    iframeDoc.close();
+
+    iframe.onload = () => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 1000);
+    };
+
+    if (iframe.contentWindow?.document.readyState === 'complete') {
+      iframe.onload?.(new Event('load'));
+    }
   };
 
   // ===== CETAK SURAT JALAN =====
   const handlePrintDeliveryNote = () => {
     if (!orderDetails) return;
 
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-      alert('Pop-up diblokir. Izinkan pop-up untuk mencetak.');
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      console.error('Cannot access iframe document');
+      document.body.removeChild(iframe);
       return;
     }
 
@@ -522,10 +805,21 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
       </html>
     `;
 
-    printWindow.document.write(deliveryHtml);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    iframeDoc.open();
+    iframeDoc.write(deliveryHtml);
+    iframeDoc.close();
+
+    iframe.onload = () => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 1000);
+    };
+
+    if (iframe.contentWindow?.document.readyState === 'complete') {
+      iframe.onload?.(new Event('load'));
+    }
   };
 
   // ===== FUNGSI ANDROID BLUETOOTH =====
@@ -880,46 +1174,122 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        {/* HEADER */}
         {/* ===== HEADER ===== */}
         <div className="border-b bg-gray-50 p-6">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
 
             {/* LEFT TITLE */}
             <div className="flex-shrink-0">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Invoice
-              </h2>
-
-              <p className="text-sm text-gray-600">
-                Order #{orderDetails.order_number}
-              </p>
+              <h2 className="text-2xl font-bold text-gray-900">Invoice</h2>
+              <p className="text-sm text-gray-600">Order #{orderDetails.order_number}</p>
             </div>
 
             {/* RIGHT SIDE */}
-            <div className="flex justify-between lg:justify-end w-full gap-4">
-
-              {/* ACTION BUTTONS */}
+            <div className="flex flex-col gap-2 w-full lg:w-auto">
+              {/* Row 1: Primary actions (Print & Send Email) */}
               <div className="flex flex-wrap items-center gap-2">
+                {/* ===== CETAK UTAMA ===== */}
+                {(platformOS === 'windows' || platformOS === 'macos') && (
+                  <button
+                    onClick={handlePrint}
+                    disabled={isPrinting || isDetecting}
+                    className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    <PrinterIcon className="w-5 h-5 mr-2" />
+                    {isPrinting ? 'Mencetak...' : 'Print'}
+                  </button>
+                )}
+                {platformOS === 'ios' && (
+                  <button
+                    onClick={() => { alert('⚠️ Cetak via AirPrint menggunakan HTML.'); handlePrintHTML(); }}
+                    className="flex items-center px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+                  >
+                    <PrinterIcon className="w-5 h-5 mr-2" />
+                    Cetak AirPrint
+                  </button>
+                )}
+                {isNative && platform === 'android' && (
+                  <button
+                    onClick={handlePrintReceipt}
+                    disabled={isPrinting || !selectedPrinter}
+                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {isPrinting ? 'Mencetak...' : 'Cetak Bluetooth'}
+                    <PrinterIcon className="w-5 h-5 ml-2" />
+                  </button>
+                )}
 
-                {/* ===== CETAK WINDOWS ===== */}
+                {/* Send Email */}
+                <button
+                  onClick={handleSendToOwner}
+                  disabled={sendingEmail}
+                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {sendingEmail ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2" />
+                  ) : (
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19h14a2 2 0 002-2V7" />
+                    </svg>
+                  )}
+                  Email
+                </button>
+              </div>
+
+              {/* Row 2: Secondary actions (smaller buttons) */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {/* PDF Invoice */}
+                <button
+                  onClick={handlePrintPDF}
+                  className="flex items-center px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                >
+                  <PrinterIcon className="w-4 h-4 mr-1" />
+                  PDF Invoice
+                </button>
+
+                {/* HTML fallback */}
+                <button
+                  onClick={handlePrintHTML}
+                  className="flex items-center px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
+                >
+                  <PrinterIcon className="w-4 h-4 mr-1" />
+                  HTML
+                </button>
+
+                {/* Surat Jalan - hanya jika takeaway */}
+                {(orderDetails.order_type === 'delivery' || orderDetails.order_type === 'delivery') && (
+                  <button
+                    onClick={handlePrintDeliveryNote}
+                    className="flex items-center px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                  >
+                    <PrinterIcon className="w-4 h-4 mr-1" />
+                    Surat Jalan
+                  </button>
+                )}
+
+                {/* Edit */}
+                {!isEditing && (
+                  <button
+                    onClick={startEditing}
+                    className="flex items-center px-2 py-1 text-xs bg-yellow-600 text-white rounded hover:bg-yellow-700"
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit
+                  </button>
+                )}
+
+                {/* Windows/Mac extra tools */}
                 {(platformOS === 'windows' || platformOS === 'macos') && (
                   <>
                     <button
-                      onClick={handlePrint}
-                      disabled={isPrinting || isDetecting}
-                      className="flex items-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50"
-                    >
-                      <PrinterIcon className="w-5 h-5 mr-2" />
-                      {isPrinting ? 'Mencetak...' : 'Cetak'}
-                    </button>
-
-                    <button
                       onClick={handleDetectWindowsPrinters}
                       disabled={isDetecting}
-                      className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                      className="flex items-center px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
                     >
-                      {isDetecting ? 'Mendeteksi...' : 'Detect Printers'}
+                      {isDetecting ? 'Mendeteksi...' : 'Detect'}
                     </button>
 
                     {windowsPrinters.length > 0 && (
@@ -929,219 +1299,72 @@ export default function InvoiceModal({ order, onComplete, onClose }: InvoiceModa
                           setSelectedWindowsPrinter(e.target.value);
                           localStorage.setItem("qz_printer", e.target.value);
                         }}
-                        className="px-3 py-2 border rounded-lg text-sm bg-white"
+                        className="px-2 py-1 text-xs border rounded bg-white"
                       >
                         {windowsPrinters.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
+                          <option key={p} value={p}>{p}</option>
                         ))}
                       </select>
                     )}
 
                     <button
                       onClick={() => setShowCertUpload(!showCertUpload)}
-                      className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                      className="flex items-center px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
                     >
-                      <svg
-                        className="w-5 h-5 mr-2"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 4v16m8-8H4"
-                        />
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                       </svg>
-
                       Cert
                     </button>
 
                     {showCertUpload && (
-                      <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-2">
-                        <input
-                          type="file"
-                          accept=".pem,.crt,.txt"
-                          onChange={handleCertificateUpload}
-                          className="text-sm"
-                        />
-
-                        <span className="text-xs text-gray-600">
-                          {certificateStatus}
-                        </span>
+                      <div className="flex items-center gap-1 bg-gray-100 rounded px-2 py-1">
+                        <input type="file" accept=".pem,.crt,.txt" onChange={handleCertificateUpload} className="text-xs" />
+                        <span className="text-xs text-gray-600">{certificateStatus}</span>
                       </div>
                     )}
                   </>
                 )}
 
-                {/* ===== iOS ===== */}
-                {platformOS === "ios" && (
-                  <>
-                    <button
-                      onClick={() => {
-                        alert(
-                          "⚠️ Cetak via AirPrint menggunakan HTML."
-                        );
-                        handlePrintHTML();
-                      }}
-                      className="flex items-center px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
-                    >
-                      <PrinterIcon className="w-5 h-5 mr-2" />
-                      Cetak AirPrint
-                    </button>
-
-                    <span className="text-xs text-gray-500">
-                      (iOS - HTML fallback)
-                    </span>
-                  </>
-                )}
-
-                {/* ===== ANDROID ===== */}
-                {isNative && platform === "android" && (
+                {/* Android extra tools */}
+                {isNative && platform === 'android' && (
                   <>
                     <button
                       onClick={handleScan}
                       disabled={isScanning}
-                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                      className="flex items-center px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
                     >
-                      {isScanning ? "Memindai..." : "Scan Printer"}
+                      {isScanning ? 'Memindai...' : 'Scan'}
                     </button>
 
                     {printers.length > 0 && (
                       <select
                         value={selectedPrinter || ""}
-                        onChange={(e) =>
-                          handleConnect(e.target.value)
-                        }
-                        className="px-3 py-2 border rounded-lg bg-white text-sm"
+                        onChange={(e) => handleConnect(e.target.value)}
+                        className="px-2 py-1 text-xs border rounded bg-white"
                       >
                         <option value="">Pilih Printer</option>
-
                         {printers.map((p) => (
-                          <option
-                            key={p.address}
-                            value={p.address}
-                          >
-                            {p.name || p.address}
-                          </option>
+                          <option key={p.address} value={p.address}>{p.name || p.address}</option>
                         ))}
                       </select>
                     )}
-
-                    <button
-                      onClick={handlePrintReceipt}
-                      disabled={isPrinting || !selectedPrinter}
-                      className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-                    >
-                      {isPrinting
-                        ? "Mencetak..."
-                        : "Cetak Bluetooth"}
-
-                      <PrinterIcon className="w-5 h-5 ml-2" />
-                    </button>
                   </>
                 )}
-
-                {/* HTML */}
-                <button
-                  onClick={() => {
-                    handlePrintHTML();
-                  }}
-                  className="flex items-center px-3 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm"
-                >
-                  <PrinterIcon className="w-4 h-4 mr-1" />
-                  HTML
-                </button>
-
-                {/* Surat Jalan */}
-                <button
-                  onClick={handlePrintDeliveryNote}
-                  className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                >
-                  <PrinterIcon className="w-5 h-5 mr-2" />
-                  Surat Jalan
-                </button>
-
-                {/* Email */}
-                <button
-                  onClick={handleSendToOwner}
-                  disabled={sendingEmail}
-                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {sendingEmail ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2" />
-                  ) : (
-                    <svg
-                      className="w-5 h-5 mr-2"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 19h14a2 2 0 002-2V7"
-                      />
-                    </svg>
-                  )}
-
-                  Email
-                </button>
-
-                {!isEditing && (
-                  <button
-                    onClick={startEditing}
-                    className="flex items-center px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
-                  >
-                    Edit
-                  </button>
-                )}
               </div>
-
-              {/* RIGHT ICONS */}
-              <div className="flex items-start gap-2 flex-shrink-0">
-
-                <button
-                  onClick={() => setShowGuide(true)}
-                  className="p-2 rounded-full hover:bg-gray-100"
-                  title="Panduan"
-                >
-                  <svg
-                    className="w-5 h-5 text-gray-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                </button>
-
-                <button
-                  onClick={onClose}
-                  className="p-2 rounded-full hover:bg-gray-100"
-                >
-                  <XMarkIcon className="w-6 h-6 text-gray-500" />
-                </button>
-
-              </div>
-
             </div>
 
+            {/* Right icons (close, guide) */}
+            <div className="flex items-start gap-2 flex-shrink-0">
+              <button onClick={() => setShowGuide(true)} className="p-2 rounded-full hover:bg-gray-100" title="Panduan">
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+              <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
+                <XMarkIcon className="w-6 h-6 text-gray-500" />
+              </button>
+            </div>
           </div>
         </div>
 
