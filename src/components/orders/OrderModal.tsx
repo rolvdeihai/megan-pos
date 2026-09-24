@@ -74,7 +74,7 @@ export default function OrderModal({
   const [selectedHour, setSelectedHour] = useState<string>(() => getLocalTimeInput());
 
   // New state for tabs and search
-  const [activeTab, setActiveTab] = useState<'table' | 'menu'>('table');
+  const [activeTab, setActiveTab] = useState<'table' | 'menu'>('menu');
   const [tableSearchQuery, setTableSearchQuery] = useState('');
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
 
@@ -215,13 +215,9 @@ export default function OrderModal({
     onSubmit(orderData);
   };
 
-  // Reset active tab when order type changes
+  // Reset to the menu tab when order type changes
   useEffect(() => {
-    if (orderType === 'dine_in') {
-      setActiveTab('table');
-    } else {
-      setActiveTab('menu');
-    }
+    setActiveTab('menu');
   }, [orderType]);
 
   // Helper to render table selection content
@@ -278,7 +274,7 @@ export default function OrderModal({
               : "Tidak ada meja yang sesuai dengan pencarian."}
           </div>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2 max-h-[400px] overflow-y-auto pr-1">
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4 max-h-[400px] overflow-y-auto pr-1">
             {filteredTables.map((table) => {
               const isSelected = selectedTable === table.id;
               return (
@@ -287,7 +283,7 @@ export default function OrderModal({
                   type="button"
                   onClick={() => table.is_selectable && setSelectedTable(table.id)}
                   disabled={!table.is_selectable}
-                  className={`rounded-xl border p-4 text-left transition ${isSelected
+                  className={`rounded-xl border p-3 text-left transition ${isSelected
                     ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
                     : table.is_selectable
                       ? 'border-gray-200 hover:border-primary/40 hover:shadow-sm'
@@ -402,7 +398,7 @@ export default function OrderModal({
       </div>
 
       {/* Menu Items Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[480px] overflow-y-auto pr-1">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[480px] overflow-y-auto pr-1">
         {filteredItems.length === 0 ? (
           <div className="col-span-full text-center py-8 text-gray-500">
             {menuSearchQuery ? "Tidak ada menu yang sesuai dengan pencarian." : "Tidak ada menu di kategori ini."}
@@ -411,19 +407,19 @@ export default function OrderModal({
           filteredItems.map(item => (
             <div
               key={item.id}
-              className={`border rounded-lg p-4 transition-shadow ${item.effective_is_available === false
+              className={`border rounded-lg p-3 transition-shadow ${item.effective_is_available === false
                 ? 'bg-gray-50 border-red-200'
                 : 'hover:shadow-md'
                 }`}
             >
               <div className="flex justify-between items-start mb-3">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900">{item.name}</h3>
-                  <p className="text-lg font-bold text-primary mt-1">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-sm text-gray-900 break-words">{item.name}</h3>
+                  <p className="text-base font-bold text-primary mt-1">
                     Rp {item.price.toLocaleString()}
                   </p>
                   {item.preparation_time && (
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 mt-1">
                       ⏱️ {item.preparation_time} menit
                     </p>
                   )}
@@ -436,7 +432,7 @@ export default function OrderModal({
                 <button
                   onClick={() => addToCart(item)}
                   disabled={item.effective_is_available === false}
-                  className={`ml-2 p-2 rounded-full ${item.effective_is_available === false
+                  className={`ml-2 shrink-0 p-2 rounded-full ${item.effective_is_available === false
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     : 'bg-primary/10 text-primary hover:bg-primary/20'
                     }`}
@@ -445,7 +441,7 @@ export default function OrderModal({
                 </button>
               </div>
               <div className="flex items-center justify-between">
-                <span className={`text-sm px-2 py-1 rounded ${item.effective_is_available === false
+                <span className={`text-xs px-2 py-1 rounded ${item.effective_is_available === false
                   ? 'bg-red-100 text-red-800'
                   : item.is_available
                     ? 'bg-green-100 text-green-800'
@@ -538,7 +534,7 @@ export default function OrderModal({
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.98 }}
         transition={{ duration: 0.26, ease: 'easeOut' }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-[1200px] h-[92vh] flex flex-col overflow-hidden"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-[1400px] h-[92vh] flex flex-col overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b">
@@ -556,7 +552,7 @@ export default function OrderModal({
 
         <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
           {/* Left Panel - Order Details & Menu */}
-          <div className="w-full lg:w-2/3 border-b lg:border-b-0 lg:border-r overflow-y-auto">
+          <div className="w-full lg:w-2/3 flex-1 lg:flex-none min-h-0 border-b lg:border-b-0 lg:border-r overflow-y-auto">
             <div className="p-4 sm:p-6">
               {/* Order Type Selection */}
               <div className="mb-6">
@@ -626,35 +622,35 @@ export default function OrderModal({
             </div>
           </div>
 
-          {/* Right Panel - Cart (unchanged) */}
-          <div className="w-full lg:w-1/3 flex flex-col min-h-[280px]">
-            <div className="p-4 sm:p-6 border-b">
+          {/* Right Panel - Cart */}
+          <div className="w-full lg:w-1/3 h-[50%] lg:h-auto flex flex-col min-h-0">
+            <div className="px-4 py-3 border-b flex items-baseline justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Keranjang</h3>
               <p className="text-sm text-gray-600">{cart.length} item</p>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3">
               {cart.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <div className="text-4xl mb-4">🛒</div>
+                <div className="text-center py-6 text-gray-500">
+                  <div className="text-3xl mb-2">🛒</div>
                   <p>Keranjang kosong</p>
                   <p className="text-sm">Tambahkan item dari menu</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {cart.map(item => (
-                    <div key={item.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900">{item.name}</h4>
-                          <p className="text-sm text-gray-600">
-                            Rp {item.price.toLocaleString()} × {item.quantity}
-                          </p>
-                          <p className="font-medium text-gray-900 mt-1">
-                            Rp {(item.price * item.quantity).toLocaleString()}
+                    <div key={item.id} className="border rounded-lg p-3">
+                      <div className="flex justify-between items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-sm text-gray-900 truncate">{item.name}</h4>
+                          <p className="text-xs text-gray-600">
+                            Rp {item.price.toLocaleString()} × {item.quantity} ={' '}
+                            <span className="font-medium text-gray-900">
+                              Rp {(item.price * item.quantity).toLocaleString()}
+                            </span>
                           </p>
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 shrink-0">
                           <button
                             onClick={() => removeFromCart(item.id)}
                             className="p-1 text-red-600 hover:bg-red-50 rounded"
@@ -670,12 +666,12 @@ export default function OrderModal({
                           </button>
                         </div>
                       </div>
-                      <div className="mt-3">
+                      <div className="mt-2">
                         <input
                           type="text"
                           value={item.specialInstructions || ''}
                           onChange={(e) => updateSpecialInstructions(item.id, e.target.value)}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
+                          className="w-full px-2 py-1 text-xs border border-gray-300 rounded-md focus:ring-primary/30 focus:border-primary"
                           placeholder="Catatan khusus (optional)"
                         />
                       </div>
@@ -686,8 +682,8 @@ export default function OrderModal({
             </div>
 
             {/* Cart Summary */}
-            <div className="border-t p-4 sm:p-6 bg-gray-50">
-              <div className="space-y-3 mb-6">
+            <div className="border-t px-4 py-3 bg-gray-50">
+              <div className="space-y-1 mb-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Subtotal</span>
                   <span>Rp {calculateSubtotal().toLocaleString()}</span>
@@ -710,17 +706,17 @@ export default function OrderModal({
                     <span>Rp {calculateDeliveryFee().toLocaleString()}</span>
                   </div>
                 )}
-                <div className="flex justify-between font-semibold text-lg pt-3 border-t">
+                <div className="flex justify-between font-semibold text-base pt-2 mt-1 border-t">
                   <span>Total (estimasi)</span>
                   <span>Rp {calculateTotal().toLocaleString()}</span>
                 </div>
               </div>
 
-              <div className="space-y-3">
+              <div className="flex flex-row-reverse gap-2">
                 <button
                   onClick={handleSubmit}
                   disabled={isSubmitting}
-                  className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  className="flex-[2] py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
                   {isSubmitting ? (
                     <>
@@ -733,7 +729,7 @@ export default function OrderModal({
                 </button>
                 <button
                   onClick={onClose}
-                  className="w-full py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
+                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
                 >
                   Batal
                 </button>
