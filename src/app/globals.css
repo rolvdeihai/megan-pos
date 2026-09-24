@@ -10,6 +10,17 @@
 @theme {
   --color-primary: var(--primary);
   --color-secondary: var(--secondary);
+
+  /* Fixed marketing palette for the landing page (not affected by restaurant themes) */
+  --color-brand: #F2544B;
+  --color-brand-soft: #FFE9E4;
+  --color-brand-2: #FF8C42;
+  --color-ink: #1F1A17;
+  --color-cream: #FFF9F4;
+}
+
+@theme inline {
+  --font-display: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
 }
 
 /* Optional: Tambahkan custom CSS atau override di sini */
@@ -61,6 +72,11 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 
 @layer utilities {
