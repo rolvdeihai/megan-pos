@@ -50,6 +50,17 @@ const orderCardVariants = {
   },
 };
 
+type OrderTypeTab = 'dine_in' | 'takeaway' | 'delivery' | 'all';
+
+const ORDER_TYPE_TABS: { value: OrderTypeTab; label: string }[] = [
+  { value: 'dine_in', label: 'Dine In' },
+  { value: 'takeaway', label: 'Takeaway' },
+  { value: 'delivery', label: 'Delivery' },
+  { value: 'all', label: 'All Orders' },
+];
+
+const ORDER_TYPE_TAB_STORAGE_KEY = 'orders:orderTypeTab';
+
 // ===== DEFINE PROPS INTERFACE =====
 interface OrdersPageProps {
   autoOpen?: boolean; // jika true, modal order akan terbuka otomatis
@@ -65,6 +76,7 @@ export default function OrdersPage({ autoOpen = false }: OrdersPageProps) {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
+  const [orderTypeTab, setOrderTypeTab] = useState<OrderTypeTab>('dine_in');
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSummary, setOrderSummary] = useState({ active: 0, completed: 0 });
@@ -102,6 +114,23 @@ export default function OrdersPage({ autoOpen = false }: OrdersPageProps) {
       // karena prop dari parent hanya di-set sekali berdasarkan user type
     }
   }, [autoOpen]);
+
+  // Restore the last opened order type tab
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(ORDER_TYPE_TAB_STORAGE_KEY);
+      if (saved && ORDER_TYPE_TABS.some((tab) => tab.value === saved)) {
+        setOrderTypeTab(saved as OrderTypeTab);
+      }
+    } catch {}
+  }, []);
+
+  const changeOrderTypeTab = (tab: OrderTypeTab) => {
+    setOrderTypeTab(tab);
+    try {
+      localStorage.setItem(ORDER_TYPE_TAB_STORAGE_KEY, tab);
+    } catch {}
+  };
 
   // ===== FETCH DATA =====
   useEffect(() => {
@@ -355,7 +384,13 @@ export default function OrdersPage({ autoOpen = false }: OrdersPageProps) {
 
   // Filter orders based on active tab, search term, and date range
   const filteredByTab = filterOrdersByTab(orders, activeTab);
+  const orderTypeCounts = filteredByTab.reduce<Record<string, number>>((counts, order) => {
+    counts[order.order_type] = (counts[order.order_type] || 0) + 1;
+    return counts;
+  }, {});
   const filteredOrders = filteredByTab.filter(order => {
+    if (orderTypeTab !== 'all' && order.order_type !== orderTypeTab) return false;
+
     // Search by order number or customer name
     if (searchTerm.trim() !== '') {
       const term = searchTerm.toLowerCase();
@@ -444,6 +479,27 @@ export default function OrdersPage({ autoOpen = false }: OrdersPageProps) {
           </nav>
         </div>
 
+        <div className="mt-4 overflow-x-auto">
+          <nav className="flex gap-1 border-b border-slate-200 min-w-max">
+            {ORDER_TYPE_TABS.map((tab) => {
+              const count = tab.value === 'all' ? filteredByTab.length : (orderTypeCounts[tab.value] || 0);
+              return (
+                <button
+                  key={tab.value}
+                  onClick={() => changeOrderTypeTab(tab.value)}
+                  className={`-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${orderTypeTab === tab.value
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                    }`}
+                >
+                  <span>{tab.label}</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{count}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
         {/* Search & Filter Bar */}
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between border-t border-slate-100 pt-5">
           <div className="flex flex-1 flex-col sm:flex-row gap-3">
@@ -496,6 +552,8 @@ export default function OrdersPage({ autoOpen = false }: OrdersPageProps) {
           <p className="text-gray-600 mb-6">
             {searchTerm || dateFrom || dateTo
               ? 'Coba ubah kata kunci atau rentang tanggal filter.'
+              : orderTypeTab !== 'all' && filteredByTab.length > 0
+                ? `Tidak ada order ${ORDER_TYPE_TABS.find((tab) => tab.value === orderTypeTab)?.label} di tab ini`
               : activeTab === 'pending'
                 ? 'Tidak ada order yang sedang aktif'
                 : 'Belum ada riwayat order yang selesai'}
@@ -512,7 +570,7 @@ export default function OrdersPage({ autoOpen = false }: OrdersPageProps) {
       ) : (
         <LayoutGroup>
           <motion.div
-            className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
             variants={orderGridVariants}
             initial="hidden"
             animate="visible"
@@ -542,13 +600,14 @@ export default function OrdersPage({ autoOpen = false }: OrdersPageProps) {
                         </span>
                       </>
                     )}
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="font-bold text-base sm:text-lg text-slate-900">{order.order_number}</h3>
-                        <p className="text-sm text-slate-600">
-                          {order.table_number ? `Meja ${order.table_number}` :
-                            order.order_type === 'takeaway' ? 'Takeaway' : 'Delivery'}
-                        </p>
+                    <div className="flex justify-between items-start gap-2 mb-4">
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-base sm:text-lg text-slate-900 truncate">
+                          {order.order_type === 'dine_in'
+                            ? (order.table_number ? `Meja ${order.table_number}` : 'Dine In')
+                            : (order.customer_name || 'Tanpa nama')}
+                        </h3>
+                        <p className="text-xs text-slate-500 truncate">{order.order_number}</p>
                       </div>
                       <span
                         className={`px-2.5 py-1 text-xs font-semibold rounded-full ${order.status === 'pending'
@@ -571,9 +630,11 @@ export default function OrdersPage({ autoOpen = false }: OrdersPageProps) {
                           {order.items_count || 0} items
                         </span>
                       </div>
-                      <p className="text-sm text-slate-600">
-                        Customer: <span className="font-medium text-slate-800">{order.customer_name || 'Tanpa nama'}</span>
-                      </p>
+                      {order.order_type === 'dine_in' && (
+                        <p className="text-sm text-slate-600">
+                          Customer: <span className="font-medium text-slate-800">{order.customer_name || 'Tanpa nama'}</span>
+                        </p>
+                      )}
                       <p className="text-sm font-semibold text-slate-900 mt-1">
                         Total: Rp {order.total_amount.toLocaleString()}
                       </p>
