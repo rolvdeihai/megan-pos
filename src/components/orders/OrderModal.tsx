@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { XMarkIcon, PlusIcon, MinusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, PlusIcon, MinusIcon, MagnifyingGlassIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 import { buildTableAvailability, type TableOrderStatus } from '@/lib/table-availability';
 import { combineReservationDateTime, getLocalDateInput, getLocalTimeInput } from '@/lib/reservation-datetime';
 import { motion } from 'framer-motion';
@@ -77,6 +77,8 @@ export default function OrderModal({
   const [activeTab, setActiveTab] = useState<'table' | 'menu'>('menu');
   const [tableSearchQuery, setTableSearchQuery] = useState('');
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
+  // On short (landscape phone) screens the price breakdown is collapsed behind the total
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   const filteredItems = useMemo(() => {
     const items = selectedCategoryId === 'all'
@@ -541,7 +543,7 @@ export default function OrderModal({
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 min-w-0">
             <div className="shrink-0">
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Order Baru</h2>
-              <p className="text-sm text-gray-600">Buat order untuk customer</p>
+              <p className="text-sm text-gray-600 [@media(max-height:500px)]:hidden">Buat order untuk customer</p>
             </div>
             {/* Order Type Selection */}
             <div className="inline-flex rounded-lg bg-gray-100 p-1 gap-1">
@@ -573,9 +575,9 @@ export default function OrderModal({
           </button>
         </div>
 
-        <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
+        <div className="flex flex-1 flex-col sm:landscape:flex-row lg:flex-row overflow-hidden">
           {/* Left Panel - Order Details & Menu */}
-          <div className="w-full lg:w-2/3 flex-1 lg:flex-none min-h-0 border-b lg:border-b-0 lg:border-r overflow-y-auto">
+          <div className="w-full sm:landscape:w-2/3 lg:w-2/3 flex-1 sm:landscape:flex-none lg:flex-none min-h-0 border-b sm:landscape:border-b-0 sm:landscape:border-r lg:border-b-0 lg:border-r overflow-y-auto">
             <div className="p-4 sm:p-6">
               {/* For Dine In: Show Tabs (Table & Menu) */}
               {orderType === 'dine_in' ? (
@@ -619,7 +621,7 @@ export default function OrderModal({
           </div>
 
           {/* Right Panel - Cart */}
-          <div className="w-full lg:w-1/3 h-[50%] lg:h-auto flex flex-col min-h-0">
+          <div className="w-full sm:landscape:w-1/3 lg:w-1/3 h-[50%] sm:landscape:h-auto lg:h-auto flex flex-col min-h-0">
             <div className="px-4 py-3 border-b flex items-baseline justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Keranjang</h3>
               <p className="text-sm text-gray-600">{cart.length} item</p>
@@ -678,8 +680,9 @@ export default function OrderModal({
             </div>
 
             {/* Cart Summary */}
-            <div className="border-t px-4 py-3 bg-gray-50">
-              <div className="space-y-1 mb-3">
+            <div className="border-t px-4 py-3 [@media(max-height:500px)]:py-2 bg-gray-50">
+              <div className="mb-3 [@media(max-height:500px)]:mb-2">
+                <div className={`space-y-1 ${showBreakdown ? '' : '[@media(max-height:500px)]:hidden'}`}>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Subtotal</span>
                   <span>Rp {calculateSubtotal().toLocaleString()}</span>
@@ -702,10 +705,18 @@ export default function OrderModal({
                     <span>Rp {calculateDeliveryFee().toLocaleString()}</span>
                   </div>
                 )}
-                <div className="flex justify-between font-semibold text-base pt-2 mt-1 border-t">
-                  <span>Total (estimasi)</span>
-                  <span>Rp {calculateTotal().toLocaleString()}</span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowBreakdown((prev) => !prev)}
+                  className={`w-full flex justify-between items-center font-semibold text-base pt-2 mt-1 border-t [@media(min-height:501px)]:cursor-default ${showBreakdown ? '' : '[@media(max-height:500px)]:border-t-0 [@media(max-height:500px)]:pt-0 [@media(max-height:500px)]:mt-0'}`}
+                >
+                  <span className="flex items-center gap-1">
+                    Total (estimasi)
+                    <ChevronUpIcon className={`hidden [@media(max-height:500px)]:block w-4 h-4 text-gray-500 transition-transform ${showBreakdown ? 'rotate-180' : ''}`} />
+                  </span>
+                  <span>Rp {calculateTotal().toLocaleString()}</span>
+                </button>
               </div>
 
               <div className="flex flex-row-reverse gap-2">
